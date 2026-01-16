@@ -35,6 +35,7 @@ import (
 
 	"github.com/IrineSistiana/mosdns/v5/mlog"
 	"github.com/IrineSistiana/mosdns/v5/pkg/pool"
+	"github.com/IrineSistiana/mosdns/v5/pkg/socks5_client"
 	"github.com/IrineSistiana/mosdns/v5/pkg/upstream/bootstrap"
 	"github.com/IrineSistiana/mosdns/v5/pkg/upstream/doh"
 	"github.com/IrineSistiana/mosdns/v5/pkg/upstream/transport"
@@ -43,7 +44,6 @@ import (
 	"github.com/quic-go/quic-go/http3"
 	"go.uber.org/zap"
 	"golang.org/x/net/http2"
-	"golang.org/x/net/proxy"
 )
 
 const (
@@ -218,15 +218,10 @@ func NewUpstream(addr string, opt Opt) (_ Upstream, err error) {
 
 		// Socks5 enabled.
 		if s5Addr := opt.Socks5; len(s5Addr) > 0 {
-			socks5Dialer, err := proxy.SOCKS5("tcp", s5Addr, nil, dialer)
-			if err != nil {
-				return nil, fmt.Errorf("failed to init socks5 dialer: %w", err)
-			}
-
-			contextDialer := socks5Dialer.(proxy.ContextDialer)
+			s5c := socks5_client.NewClient(s5Addr, "", "", dialer)
 			dialAddr := net.JoinHostPort(host, strconv.Itoa(int(port)))
 			return func(ctx context.Context) (net.Conn, error) {
-				return contextDialer.DialContext(ctx, "tcp", dialAddr)
+				return s5c.DialContext(ctx, "tcp", dialAddr)
 			}, nil
 		}
 
@@ -285,7 +280,17 @@ func NewUpstream(addr string, opt Opt) (_ Upstream, err error) {
 		dialAddr := joinPort(host, port)
 
 		dialUdpPipeline := func(ctx context.Context) (transport.DnsConn, error) {
-			c, err := dialer.DialContext(ctx, "udp", dialAddr)
+			var c net.Conn
+			var err error
+
+			if s5Addr := opt.Socks5; len(s5Addr) > 0 {
+				s5c := socks5_client.NewClient(s5Addr, "", "", dialer)
+				// dialAddr is already "ip:port"
+				c, err = s5c.DialContext(ctx, "udp", dialAddr)
+			} else {
+				c, err = dialer.DialContext(ctx, "udp", dialAddr)
+			}
+
 			if err != nil {
 				return nil, err
 			}
