@@ -3,6 +3,8 @@ let paused = false;
 let lastRecords = [];
 let latestHealth = null;
 let themeMode = localStorage.getItem("mosdns-dashboard-theme") || "auto";
+let queryLimit = Number(localStorage.getItem("mosdns-dashboard-query-limit") || 500);
+if (![50, 100, 500, 1000].includes(queryLimit)) queryLimit = 500;
 
 const el = (id) => document.getElementById(id);
 const fmt = (value) => value === undefined || value === null || value === "" ? "—" : String(value);
@@ -111,7 +113,7 @@ function filteredRecords() {
 }
 
 function renderRecords(records) {
-  el("queryCount").textContent = `${fmtNum(records.length)} shown`;
+  el("queryCount").textContent = `${fmtNum(records.length)} shown · ${fmtNum(lastRecords.length)} fetched`;
   if (!records.length) {
     el("records").innerHTML = `<tr><td colspan="10" class="empty-state">No matching queries</td></tr>`;
     return;
@@ -186,7 +188,7 @@ async function refresh() {
     const [health, stats, recent, domains, clients, routes] = await Promise.all([
       getJSON("/health"),
       getJSON("/api/stats?window=5m"),
-      getJSON("/api/query-log?limit=500"),
+      getJSON(`/api/query-log?limit=${queryLimit}`),
       getJSON("/api/top-domains?since=1h&limit=12"),
       getJSON("/api/top-clients?since=1h&limit=12"),
       getJSON("/api/routes?since=1h"),
@@ -214,6 +216,12 @@ for (const id of ["logFilterDomain", "logFilterPath", "logFilterTransport", "log
   el(id).addEventListener("input", applyLogFilter);
   el(id).addEventListener("change", applyLogFilter);
 }
+el("logLimit").value = String(queryLimit);
+el("logLimit").addEventListener("change", () => {
+  queryLimit = Number(el("logLimit").value);
+  localStorage.setItem("mosdns-dashboard-query-limit", String(queryLimit));
+  refresh();
+});
 
 updateThemeButton();
 refresh();

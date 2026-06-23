@@ -260,9 +260,9 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(300px, 18vw, 460px);
   gap: clamp(1rem, 1.1vw, 1.5rem);
-  align-items: start;
+  align-items: stretch;
 }
-.query-panel { min-height: max(620px, calc(100vh - 28rem)); display: flex; flex-direction: column; }
+.query-panel { min-height: max(760px, calc(100vh - 26rem)); display: flex; flex-direction: column; }
 .query-header { align-items: center; }
 .filters {
   display: flex;
@@ -282,8 +282,8 @@ body {
   outline: none;
 }
 .filters input { width: clamp(155px, 12vw, 260px); color: var(--text-primary); }
-.query-log { flex: 1; min-height: 0; position: relative; }
-.query-log-scroll { position: absolute; inset: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--bg-elevated) transparent; }
+.query-log { flex: 1; min-height: 0; position: static; }
+.query-log-scroll { height: 100%; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--bg-elevated) transparent; }
 .query-log table { width: 100%; min-width: 1060px; border-collapse: collapse; font-family: var(--font-mono); font-size: 0.75rem; }
 .query-log th {
   text-align: left;
@@ -343,7 +343,8 @@ body {
   html { font-size: 16px; }
   .stats-row { gap: 1.2rem; }
   .main-grid { grid-template-columns: minmax(0, 1fr) clamp(320px, 16vw, 480px); }
-  .query-panel { min-height: max(720px, calc(100vh - 27rem)); }
+  .query-panel { min-height: max(960px, calc(100vh - 24rem)); }
+  .query-log table { font-size: 0.76rem; }
 }
 
 @media (max-width: 1100px) {
