@@ -21,10 +21,15 @@ package cache
 
 import (
 	"bytes"
-	"github.com/miekg/dns"
+	"context"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/IrineSistiana/mosdns/v5/pkg/query_context"
+	"github.com/IrineSistiana/mosdns/v5/pkg/query_observe"
+	"github.com/IrineSistiana/mosdns/v5/plugin/executable/sequence"
+	"github.com/miekg/dns"
 )
 
 func Test_cachePlugin_Dump(t *testing.T) {
@@ -59,4 +64,70 @@ func Test_cachePlugin_Dump(t *testing.T) {
 	if enw != enr {
 		t.Fatalf("read err, wrote %d entries, read %d", enw, enr)
 	}
+}
+
+func TestCacheExecSetsSkipMetadata(t *testing.T) {
+	c := NewCache(&Args{Size: 1024}, Opts{})
+	defer c.Close()
+
+	q := new(dns.Msg)
+	q.SetQuestion("skip.example.", dns.TypeA)
+	q.Response = true
+	qCtx := query_context.NewContext(q)
+	next := sequence.NewChainWalker(nil, nil)
+
+	if err := c.Exec(context.Background(), qCtx, next); err != nil {
+		t.Fatal(err)
+	}
+	if got := query_observe.Get(qCtx).CacheStatus; got != "skip" {
+		t.Fatalf("cache status = %q, want skip", got)
+	}
+}
+
+func TestCacheExecSetsMissThenHitMetadata(t *testing.T) {
+	c := NewCache(&Args{Size: 1024}, Opts{})
+	defer c.Close()
+
+	first := newCacheTestContext("cache.example.")
+	fillResponse := sequence.NewChainWalker([]*sequence.ChainNode{{
+		E: sequence.ExecutableFunc(func(ctx context.Context, qCtx *query_context.Context) error {
+			r := new(dns.Msg)
+			r.SetReply(qCtx.Q())
+			r.Answer = []dns.RR{newARecord(t, "cache.example.")}
+			qCtx.SetResponse(r)
+			return nil
+		}),
+	}}, nil)
+	if err := c.Exec(context.Background(), first, fillResponse); err != nil {
+		t.Fatal(err)
+	}
+	if got := query_observe.Get(first).CacheStatus; got != "miss" {
+		t.Fatalf("first cache status = %q, want miss", got)
+	}
+
+	second := newCacheTestContext("cache.example.")
+	if err := c.Exec(context.Background(), second, sequence.NewChainWalker(nil, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if got := query_observe.Get(second).CacheStatus; got != "hit" {
+		t.Fatalf("second cache status = %q, want hit", got)
+	}
+	if second.R() == nil {
+		t.Fatal("second response is nil, want cached response")
+	}
+}
+
+func newCacheTestContext(qname string) *query_context.Context {
+	q := new(dns.Msg)
+	q.SetQuestion(qname, dns.TypeA)
+	return query_context.NewContext(q)
+}
+
+func newARecord(t *testing.T, qname string) dns.RR {
+	t.Helper()
+	rr, err := dns.NewRR(qname + " 60 IN A 192.0.2.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rr
 }
