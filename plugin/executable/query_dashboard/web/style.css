@@ -26,47 +26,47 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg-deep: oklch(0 0 0);
-    --bg-surface: oklch(0.25 0.01 230);
-    --bg-elevated: oklch(0.4 0.01 230);
-    --bg-card: oklch(0.15 0.005 230);
-    --amber: oklch(0.7 0.17 42);
-    --amber-dim: oklch(0.6 0.17 42);
-    --teal: oklch(0.7 0.09 125);
-    --teal-dim: oklch(0.6 0.09 125);
-    --violet: oklch(0.7 0.09 260);
-    --violet-dim: oklch(0.6 0.09 260);
-    --emerald: oklch(0.6 0.08 144);
-    --rose: oklch(0.7 0.2 28);
-    --cyan: oklch(0.7 0.06 200);
-    --text-primary: oklch(0.8 0.02 230);
-    --text-secondary: oklch(0.7 0.02 230);
-    --text-dim: oklch(0.6 0.02 230);
-    --border: oklch(1 0 0 / 12%);
+    --bg-deep: oklch(0.16 0.008 230);
+    --bg-surface: oklch(0.24 0.012 230);
+    --bg-elevated: oklch(0.33 0.014 230);
+    --bg-card: oklch(0.20 0.01 230);
+    --amber: oklch(0.74 0.17 42);
+    --amber-dim: oklch(0.68 0.16 42);
+    --teal: oklch(0.74 0.09 125);
+    --teal-dim: oklch(0.67 0.09 125);
+    --violet: oklch(0.74 0.09 260);
+    --violet-dim: oklch(0.68 0.09 260);
+    --emerald: oklch(0.68 0.08 144);
+    --rose: oklch(0.74 0.19 28);
+    --cyan: oklch(0.76 0.07 200);
+    --text-primary: oklch(0.90 0.02 230);
+    --text-secondary: oklch(0.78 0.02 230);
+    --text-dim: oklch(0.67 0.02 230);
+    --border: oklch(1 0 0 / 16%);
   }
 }
 
 [data-theme="dark"] {
-  --bg-deep: oklch(0 0 0);
-  --bg-surface: oklch(0.25 0.01 230);
-  --bg-elevated: oklch(0.4 0.01 230);
-  --bg-card: oklch(0.15 0.005 230);
-  --amber: oklch(0.7 0.17 42);
-  --amber-dim: oklch(0.6 0.17 42);
-  --teal: oklch(0.7 0.09 125);
-  --teal-dim: oklch(0.6 0.09 125);
-  --violet: oklch(0.7 0.09 260);
-  --violet-dim: oklch(0.6 0.09 260);
-  --emerald: oklch(0.6 0.08 144);
-  --rose: oklch(0.7 0.2 28);
-  --cyan: oklch(0.7 0.06 200);
-  --text-primary: oklch(0.8 0.02 230);
-  --text-secondary: oklch(0.7 0.02 230);
-  --text-dim: oklch(0.6 0.02 230);
-  --border: oklch(1 0 0 / 12%);
+  --bg-deep: oklch(0.16 0.008 230);
+  --bg-surface: oklch(0.24 0.012 230);
+  --bg-elevated: oklch(0.33 0.014 230);
+  --bg-card: oklch(0.20 0.01 230);
+  --amber: oklch(0.74 0.17 42);
+  --amber-dim: oklch(0.68 0.16 42);
+  --teal: oklch(0.74 0.09 125);
+  --teal-dim: oklch(0.67 0.09 125);
+  --violet: oklch(0.74 0.09 260);
+  --violet-dim: oklch(0.68 0.09 260);
+  --emerald: oklch(0.68 0.08 144);
+  --rose: oklch(0.74 0.19 28);
+  --cyan: oklch(0.76 0.07 200);
+  --text-primary: oklch(0.90 0.02 230);
+  --text-secondary: oklch(0.78 0.02 230);
+  --text-dim: oklch(0.67 0.02 230);
+  --border: oklch(1 0 0 / 16%);
 }
 
-html { font-size: 15px; }
+html { font-size: 16px; }
 body {
   font-family: var(--font-body);
   background: var(--bg-deep);
@@ -124,7 +124,7 @@ body {
 
 .btn {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   font-weight: 600;
   border: 1px solid var(--border);
   border-radius: 5px;
@@ -167,7 +167,7 @@ body {
 .stat-card.uptime::before { background: var(--cyan); }
 .stat-card.memory::before { background: var(--text-dim); }
 .stat-label, .panel-title {
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -187,7 +187,7 @@ body {
 .stat-card.uptime .stat-value { color: var(--cyan); }
 .stat-sub {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: 0.86rem;
   color: var(--text-dim);
   margin-top: 0.3rem;
 }
@@ -217,7 +217,7 @@ body {
 .path-bar-row:last-child { margin-bottom: 0; }
 .path-label {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   width: 90px;
   text-align: right;
   color: var(--text-secondary);
@@ -249,7 +249,7 @@ body {
 .path-bar-fill.other { background: var(--emerald); }
 .path-pct {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   width: 54px;
   color: var(--text-dim);
   text-align: right;
@@ -273,7 +273,7 @@ body {
 }
 .filters input, .filters select {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   padding: 0.25rem 0.45rem;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -284,11 +284,11 @@ body {
 .filters input { width: clamp(155px, 12vw, 260px); color: var(--text-primary); }
 .query-log { flex: 1; min-height: 0; position: static; }
 .query-log-scroll { height: 100%; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--bg-elevated) transparent; }
-.query-log table { width: 100%; min-width: 1060px; border-collapse: collapse; font-family: var(--font-mono); font-size: 0.75rem; }
+.query-log table { width: 100%; min-width: 1060px; border-collapse: collapse; font-family: var(--font-mono); font-size: 0.84rem; }
 .query-log th {
   text-align: left;
-  padding: 0.5rem 0.6rem;
-  font-size: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -300,7 +300,7 @@ body {
   z-index: 1;
 }
 .query-log td {
-  padding: 0.4rem 0.6rem;
+  padding: 0.46rem 0.65rem;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
   color: var(--text-secondary);
@@ -311,7 +311,7 @@ body {
   display: inline-block;
   padding: 0.1rem 0.4rem;
   border-radius: 3px;
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: 500;
 }
 .path-tag.direct, .path-tag.foreign_default { background: color-mix(in oklch, var(--amber) 14%, transparent); color: var(--amber-dim); }
@@ -331,20 +331,20 @@ body {
   padding: 0.45rem 0;
   border-bottom: 1px solid var(--border);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
 }
 .list-item:last-child, .health-row:last-child { border-bottom: none; }
 .list-label { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list-count, .health-row strong { color: var(--text-dim); flex-shrink: 0; font-weight: 500; }
-.empty-state { font-size: 0.8rem; color: var(--text-dim); font-style: italic; padding: 0.8rem 0; }
+.empty-state { font-size: 0.86rem; color: var(--text-dim); font-style: italic; padding: 0.8rem 0; }
 .error-text { color: var(--rose); }
 
 @media (min-width: 1800px) {
-  html { font-size: 16px; }
+  html { font-size: 17px; }
   .stats-row { gap: 1.2rem; }
   .main-grid { grid-template-columns: minmax(0, 1fr) clamp(320px, 16vw, 480px); }
   .query-panel { min-height: max(960px, calc(100vh - 24rem)); }
-  .query-log table { font-size: 0.76rem; }
+  .query-log table { font-size: 0.86rem; }
 }
 
 @media (max-width: 1100px) {

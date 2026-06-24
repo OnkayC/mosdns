@@ -3,8 +3,9 @@ let paused = false;
 let lastRecords = [];
 let latestHealth = null;
 let themeMode = localStorage.getItem("mosdns-dashboard-theme") || "auto";
-let queryLimit = Number(localStorage.getItem("mosdns-dashboard-query-limit") || 500);
-if (![50, 100, 500, 1000].includes(queryLimit)) queryLimit = 500;
+let queryLimit = Number(localStorage.getItem("mosdns-dashboard-query-limit") || 100);
+if (![50, 100, 500, 1000].includes(queryLimit)) queryLimit = 100;
+let excludedRoutesText = localStorage.getItem("mosdns-dashboard-excluded-routes") || "";
 
 const el = (id) => document.getElementById(id);
 const fmt = (value) => value === undefined || value === null || value === "" ? "—" : String(value);
@@ -28,6 +29,10 @@ function latency(value) {
 
 function routeClass(value) {
   return String(value || "neutral").replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function excludedRoutes() {
+  return new Set(excludedRoutesText.split(/[\s,]+/).map((route) => route.trim()).filter(Boolean));
 }
 
 async function getJSON(path) {
@@ -103,7 +108,9 @@ function filteredRecords() {
   const route = el("logFilterPath").value;
   const transport = el("logFilterTransport").value;
   const cache = el("logFilterCache").value;
+  const excluded = excludedRoutes();
   return lastRecords.filter((record) => {
+    if (excluded.has(record.route || "")) return false;
     if (domain && !String(record.qname || "").toLowerCase().includes(domain)) return false;
     if (route && record.route !== route) return false;
     if (transport && record.transport !== transport) return false;
@@ -216,6 +223,12 @@ for (const id of ["logFilterDomain", "logFilterPath", "logFilterTransport", "log
   el(id).addEventListener("input", applyLogFilter);
   el(id).addEventListener("change", applyLogFilter);
 }
+el("logExcludeRoutes").value = excludedRoutesText;
+el("logExcludeRoutes").addEventListener("input", () => {
+  excludedRoutesText = el("logExcludeRoutes").value;
+  localStorage.setItem("mosdns-dashboard-excluded-routes", excludedRoutesText);
+  applyLogFilter();
+});
 el("logLimit").value = String(queryLimit);
 el("logLimit").addEventListener("change", () => {
   queryLimit = Number(el("logLimit").value);

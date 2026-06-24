@@ -94,6 +94,7 @@
           <span class="panel-title">Recent Queries</span>
           <div class="filters">
             <input type="text" id="logFilterDomain" placeholder="filter domain...">
+            <input type="text" id="logExcludeRoutes" placeholder="exclude routes..." title="Comma or space separated routes to hide">
             <select id="logFilterPath">
               <option value="">all routes</option>
             </select>
@@ -111,8 +112,8 @@
             </select>
             <select id="logLimit" title="Recent query fetch limit">
               <option value="50">50 rows</option>
-              <option value="100">100 rows</option>
-              <option value="500" selected>500 rows</option>
+              <option value="100" selected>100 rows</option>
+              <option value="500">500 rows</option>
               <option value="1000">1000 rows</option>
             </select>
             <span class="panel-title dim" id="queryCount">—</span>
