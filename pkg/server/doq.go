@@ -107,6 +107,7 @@ func ServeDoQ(l *quic.Listener, h Handler, opts DoQServerOpts) error {
 					queryMeta := QueryMeta{
 						ClientAddr: clientAddr,
 						ServerName: c.ConnectionState().TLS.ServerName,
+						Transport:  "doq",
 					}
 
 					resp := h.Handle(connCtx, req, queryMeta, pool.PackTCPBuffer)

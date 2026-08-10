@@ -112,8 +112,15 @@ func TestAPIHealthAndIndex(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("index status = %d", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "mosdns query dashboard") {
+	body := rr.Body.String()
+	if !strings.Contains(body, "mosdns query dashboard") {
 		t.Fatalf("index body missing dashboard shell")
+	}
+	if !strings.Contains(body, `/plugins/test/app.js`) || !strings.Contains(body, `/plugins/test/style.css`) {
+		t.Fatalf("index body missing tag-derived asset URLs: %s", body)
+	}
+	if strings.Contains(body, "__DASHBOARD_BASE__") {
+		t.Fatalf("index body still contains base placeholder")
 	}
 }
 

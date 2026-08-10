@@ -49,6 +49,7 @@ type QueryRecord struct {
 }
 
 type Dashboard struct {
+	tag    string
 	args   Args
 	logger *zap.Logger
 	ring   *Ring
@@ -95,6 +96,7 @@ func NewDashboard(args *Args, logger *zap.Logger, metricsTag string) (*Dashboard
 
 	labels := prometheus.Labels{"tag": metricsTag}
 	d := &Dashboard{
+		tag:    metricsTag,
 		args:   cfg,
 		logger: logger,
 		ring:   NewRing(cfg.RecentSize),
@@ -188,9 +190,13 @@ func (d *Dashboard) Record(qCtx *query_context.Context, elapsed time.Duration, e
 	if qCtx.ServerMeta.ClientAddr.IsValid() {
 		client = qCtx.ServerMeta.ClientAddr.String()
 	}
-	transport := "tcp"
-	if qCtx.ServerMeta.FromUDP {
-		transport = "udp"
+	transport := qCtx.ServerMeta.Transport
+	if transport == "" {
+		if qCtx.ServerMeta.FromUDP {
+			transport = "udp"
+		} else {
+			transport = "tcp"
+		}
 	}
 
 	record := QueryRecord{
@@ -252,6 +258,17 @@ func (d *Dashboard) recordsSince(since time.Time) ([]QueryRecord, error) {
 		}
 	}
 	return out, nil
+}
+
+func (d *Dashboard) stats(since time.Time) (statsResponse, error) {
+	if d.sqlite != nil {
+		return d.sqlite.Stats(since)
+	}
+	records, err := d.recordsSince(since)
+	if err != nil {
+		return statsResponse{}, err
+	}
+	return statsFromRecords(records), nil
 }
 
 func (d *Dashboard) topDomains(since time.Time, limit int) ([]TopDomainItem, error) {

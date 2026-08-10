@@ -133,6 +133,90 @@ func TestSQLiteStorePersistsAndQueriesRecords(t *testing.T) {
 	}
 }
 
+func TestSQLiteSearchEscapesLikeWildcards(t *testing.T) {
+	store, err := newSQLiteStore(SQLiteArgs{
+		Path:            filepath.Join(t.TempDir(), "query-dashboard.sqlite"),
+		BatchSize:       10,
+		FlushIntervalMs: 60_000,
+		RetentionHours:  1,
+	}, 4, zap.NewNop(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	records := []QueryRecord{
+		{Time: time.Now(), Uqid: 1, Qname: "_sip._tcp.example.", Qtype: 33, Qclass: 1, LatencyUs: 10},
+		{Time: time.Now(), Uqid: 2, Qname: "xsipxtcp.example.", Qtype: 33, Qclass: 1, LatencyUs: 10},
+		{Time: time.Now(), Uqid: 3, Qname: "100%match.example.", Qtype: 1, Qclass: 1, LatencyUs: 10},
+		{Time: time.Now(), Uqid: 4, Qname: "100Xmatch.example.", Qtype: 1, Qclass: 1, LatencyUs: 10},
+	}
+	if err := store.writeBatch(records); err != nil {
+		t.Fatal(err)
+	}
+
+	underscore, err := store.Search("_sip._tcp", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(underscore) != 1 || underscore[0].Uqid != 1 {
+		t.Fatalf("underscore search = %#v, want only literal _sip._tcp", underscore)
+	}
+
+	percent, err := store.Search("100%", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(percent) != 1 || percent[0].Uqid != 3 {
+		t.Fatalf("percent search = %#v, want only literal 100%%", percent)
+	}
+}
+
+func TestSQLiteStatsAggregatesFullWindow(t *testing.T) {
+	store, err := newSQLiteStore(SQLiteArgs{
+		Path:            filepath.Join(t.TempDir(), "query-dashboard.sqlite"),
+		BatchSize:       10,
+		FlushIntervalMs: 60_000,
+		RetentionHours:  1,
+	}, 4, zap.NewNop(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	now := time.Now()
+	rcodeOK := 0
+	rcodeNX := 3
+	records := []QueryRecord{
+		{Time: now.Add(-time.Minute), Uqid: 1, Qname: "a.example.", Route: "foreign", CacheStatus: "miss", Rcode: &rcodeOK, LatencyUs: 10},
+		{Time: now.Add(-30 * time.Second), Uqid: 2, Qname: "b.example.", Route: "foreign", CacheStatus: "hit", Rcode: &rcodeNX, LatencyUs: 20},
+		{Time: now, Uqid: 3, Qname: "c.example.", Route: "apple", CacheStatus: "miss", Rcode: &rcodeOK, LatencyUs: 30},
+	}
+	if err := store.writeBatch(records); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := store.Stats(now.Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Total != 3 {
+		t.Fatalf("total = %d, want 3", stats.Total)
+	}
+	if stats.RouteCounts["foreign"] != 2 || stats.RouteCounts["apple"] != 1 {
+		t.Fatalf("route counts = %#v", stats.RouteCounts)
+	}
+	if stats.CacheStatusCounts["miss"] != 2 || stats.CacheStatusCounts["hit"] != 1 {
+		t.Fatalf("cache counts = %#v", stats.CacheStatusCounts)
+	}
+	if stats.RcodeCounts["0"] != 2 || stats.RcodeCounts["3"] != 1 {
+		t.Fatalf("rcode counts = %#v", stats.RcodeCounts)
+	}
+	if stats.LatencyUs.P50 != 20 || stats.LatencyUs.P95 != 30 || stats.LatencyUs.P99 != 30 {
+		t.Fatalf("latency stats = %#v", stats.LatencyUs)
+	}
+}
+
 func TestSQLiteStoreCloseAndWriteErrorCallback(t *testing.T) {
 	var writeErrors int
 	store, err := newSQLiteStore(SQLiteArgs{

@@ -85,3 +85,20 @@ func TestRecordUsesConfiguredEntry(t *testing.T) {
 		t.Fatalf("entry = %q, want configured", record.Entry)
 	}
 }
+
+func TestRecordUsesExplicitTransport(t *testing.T) {
+	d, err := NewDashboard(&Args{RecentSize: 10}, zap.NewNop(), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+
+	q := new(dns.Msg)
+	q.SetQuestion("example.com.", dns.TypeA)
+	qCtx := query_context.NewContext(q)
+	qCtx.ServerMeta.Transport = "doq"
+	record := d.Record(qCtx, time.Microsecond, nil)
+	if record.Transport != "doq" {
+		t.Fatalf("transport = %q, want doq", record.Transport)
+	}
+}

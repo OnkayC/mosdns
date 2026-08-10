@@ -101,7 +101,7 @@ func ServeTCP(l net.Listener, h Handler, opts TCPServerOpts) error {
 					if ok {
 						clientAddr = ta.AddrPort().Addr()
 					}
-					r := h.Handle(tcpConnCtx, req, QueryMeta{ClientAddr: clientAddr, ServerName: serverName}, pool.PackTCPBuffer)
+					r := h.Handle(tcpConnCtx, req, QueryMeta{ClientAddr: clientAddr, ServerName: serverName, Transport: "tcp"}, pool.PackTCPBuffer)
 					if r == nil {
 						c.Close() // abort the connection
 						return

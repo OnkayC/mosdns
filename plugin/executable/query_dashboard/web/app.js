@@ -1,4 +1,12 @@
-const base = "/plugins/query_dashboard";
+const base = (() => {
+  const script = document.currentScript;
+  if (script && script.src) {
+    const path = new URL(".", script.src).pathname;
+    return path.endsWith("/") ? path.slice(0, -1) : path;
+  }
+  const path = window.location.pathname.replace(/\/$/, "");
+  return path || "";
+})();
 let paused = false;
 let lastRecords = [];
 let latestHealth = null;

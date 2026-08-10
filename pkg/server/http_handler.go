@@ -96,6 +96,7 @@ func (h *HttpHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	queryMeta := QueryMeta{
 		ClientAddr: clientAddr,
+		Transport:  "doh",
 	}
 	if u := req.URL; u != nil {
 		queryMeta.UrlPath = u.Path
