@@ -14,7 +14,12 @@ import (
 	"go.uber.org/zap"
 )
 
-const PluginType = "query_dashboard"
+const (
+	PluginType                   = "query_dashboard"
+	defaultSQLiteBatchSize       = 500
+	defaultSQLiteFlushIntervalMs = 1000
+	defaultSQLiteRetentionHours  = 168
+)
 
 type Args struct {
 	Entry       string     `yaml:"entry"`
@@ -140,17 +145,21 @@ func (a *Args) setDefaults() {
 	if a.ChannelSize <= 0 {
 		a.ChannelSize = 4096
 	}
-	if a.SQLite.Path == "" {
-		a.SQLite.Path = "./logs/query-dashboard.sqlite"
+	a.SQLite.setDefaults()
+}
+
+func (a *SQLiteArgs) setDefaults() {
+	if a.Path == "" {
+		a.Path = "./logs/query-dashboard.sqlite"
 	}
-	if a.SQLite.BatchSize <= 0 {
-		a.SQLite.BatchSize = 500
+	if a.BatchSize <= 0 {
+		a.BatchSize = defaultSQLiteBatchSize
 	}
-	if a.SQLite.FlushIntervalMs <= 0 {
-		a.SQLite.FlushIntervalMs = 1000
+	if a.FlushIntervalMs <= 0 {
+		a.FlushIntervalMs = defaultSQLiteFlushIntervalMs
 	}
-	if a.SQLite.RetentionHours <= 0 {
-		a.SQLite.RetentionHours = 168
+	if a.RetentionHours <= 0 {
+		a.RetentionHours = defaultSQLiteRetentionHours
 	}
 }
 
@@ -190,7 +199,7 @@ func (d *Dashboard) Record(qCtx *query_context.Context, elapsed time.Duration, e
 	if qCtx.ServerMeta.ClientAddr.IsValid() {
 		client = qCtx.ServerMeta.ClientAddr.String()
 	}
-	transport := qCtx.ServerMeta.Transport
+	transport := meta.Transport
 	if transport == "" {
 		if qCtx.ServerMeta.FromUDP {
 			transport = "udp"

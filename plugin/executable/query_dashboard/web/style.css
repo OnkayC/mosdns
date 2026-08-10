@@ -16,7 +16,7 @@
   --cyan: #4a7c8a;
   --text-primary: #2c2418;
   --text-secondary: #6b5e4f;
-  --text-dim: #a39888;
+  --text-dim: #6b5e4f;
   --text-on-btn: #fff;
   --border: rgba(0, 0, 0, 0.08);
   --font-display: Georgia, 'Times New Roman', serif;
@@ -281,7 +281,10 @@ body {
   border-radius: 4px;
   background: var(--bg-surface);
   color: var(--text-secondary);
-  outline: none;
+}
+.filters input:focus-visible, .filters select:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
 }
 .filters input { width: clamp(155px, 12vw, 260px); color: var(--text-primary); }
 .query-log { flex: 1; min-height: 0; position: static; }

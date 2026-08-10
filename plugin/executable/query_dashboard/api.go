@@ -235,7 +235,14 @@ func parseDurationParam(req *http.Request, key string, fallback time.Duration) (
 	if value == "" {
 		return fallback, nil
 	}
-	return time.ParseDuration(value)
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, err
+	}
+	if duration < 0 {
+		return 0, errors.New(key + " must be non-negative")
+	}
+	return duration, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
@@ -330,7 +337,12 @@ func topDomainsFromRecords(records []QueryRecord, limit int) []TopDomainItem {
 	for qname, count := range counts {
 		items = append(items, TopDomainItem{Qname: qname, Count: count})
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Count > items[j].Count })
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Count != items[j].Count {
+			return items[i].Count > items[j].Count
+		}
+		return items[i].Qname < items[j].Qname
+	})
 	if len(items) > limit {
 		items = items[:limit]
 	}
@@ -348,7 +360,12 @@ func topClientsFromRecords(records []QueryRecord, limit int) []TopClientItem {
 	for client, count := range counts {
 		items = append(items, TopClientItem{Client: client, Count: count})
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Count > items[j].Count })
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Count != items[j].Count {
+			return items[i].Count > items[j].Count
+		}
+		return items[i].Client < items[j].Client
+	})
 	if len(items) > limit {
 		items = items[:limit]
 	}
@@ -366,6 +383,11 @@ func routesFromRecords(records []QueryRecord) []RouteItem {
 	for route, count := range counts {
 		items = append(items, RouteItem{Route: route, Count: count})
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Count > items[j].Count })
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Count != items[j].Count {
+			return items[i].Count > items[j].Count
+		}
+		return items[i].Route < items[j].Route
+	})
 	return items
 }

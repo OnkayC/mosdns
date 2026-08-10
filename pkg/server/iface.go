@@ -22,12 +22,22 @@ type Handler interface {
 type QueryMeta struct {
 	FromUDP bool
 
-	// Transport is an optional explicit server transport label such as
-	// "udp", "tcp", "doq", or "doh". When empty, callers may fall back to FromUDP.
-	Transport string
-
 	// Optional
 	ClientAddr netip.Addr
 	ServerName string
 	UrlPath    string
+}
+
+type queryTransportContextKey struct{}
+
+func WithQueryTransport(ctx context.Context, transport string) context.Context {
+	return context.WithValue(ctx, queryTransportContextKey{}, transport)
+}
+
+func QueryTransportFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	transport, _ := ctx.Value(queryTransportContextKey{}).(string)
+	return transport
 }

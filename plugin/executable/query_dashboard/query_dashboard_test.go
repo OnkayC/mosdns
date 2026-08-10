@@ -96,7 +96,7 @@ func TestRecordUsesExplicitTransport(t *testing.T) {
 	q := new(dns.Msg)
 	q.SetQuestion("example.com.", dns.TypeA)
 	qCtx := query_context.NewContext(q)
-	qCtx.ServerMeta.Transport = "doq"
+	query_observe.SetTransport(qCtx, "doq")
 	record := d.Record(qCtx, time.Microsecond, nil)
 	if record.Transport != "doq" {
 		t.Fatalf("transport = %q, want doq", record.Transport)

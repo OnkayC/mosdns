@@ -71,6 +71,7 @@ func ServeTCP(l net.Listener, h Handler, opts TCPServerOpts) error {
 
 		// handle connection
 		tcpConnCtx, cancelConn := context.WithCancelCause(listenerCtx)
+		tcpConnCtx = WithQueryTransport(tcpConnCtx, "tcp")
 		go func() {
 			defer c.Close()
 			defer cancelConn(errConnectionCtxCanceled)
@@ -101,7 +102,7 @@ func ServeTCP(l net.Listener, h Handler, opts TCPServerOpts) error {
 					if ok {
 						clientAddr = ta.AddrPort().Addr()
 					}
-					r := h.Handle(tcpConnCtx, req, QueryMeta{ClientAddr: clientAddr, ServerName: serverName, Transport: "tcp"}, pool.PackTCPBuffer)
+					r := h.Handle(tcpConnCtx, req, QueryMeta{ClientAddr: clientAddr, ServerName: serverName}, pool.PackTCPBuffer)
 					if r == nil {
 						c.Close() // abort the connection
 						return

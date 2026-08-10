@@ -29,6 +29,7 @@ type sqliteStore struct {
 }
 
 func newSQLiteStore(args SQLiteArgs, channelSize int, logger *zap.Logger, onWriteError func(error)) (*sqliteStore, error) {
+	args.setDefaults()
 	if channelSize <= 0 {
 		channelSize = 4096
 	}
@@ -38,10 +39,11 @@ func newSQLiteStore(args SQLiteArgs, channelSize int, logger *zap.Logger, onWrit
 	if err := os.MkdirAll(filepath.Dir(args.Path), 0o755); err != nil {
 		return nil, fmt.Errorf("create sqlite parent dir: %w", err)
 	}
-	db, err := sql.Open("sqlite", args.Path)
+	db, err := sql.Open("sqlite", args.Path+"?_pragma=busy_timeout%3d5000")
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
+	db.SetMaxOpenConns(4)
 	store := &sqliteStore{
 		db:            db,
 		ch:            make(chan QueryRecord, channelSize),
@@ -67,7 +69,6 @@ func newSQLiteStore(args SQLiteArgs, channelSize int, logger *zap.Logger, onWrit
 func (s *sqliteStore) init() error {
 	statements := [...]string{
 		"PRAGMA journal_mode=WAL;",
-		"PRAGMA busy_timeout=5000;",
 		`CREATE TABLE IF NOT EXISTS queries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts_unix_nano INTEGER NOT NULL,

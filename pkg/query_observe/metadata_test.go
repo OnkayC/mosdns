@@ -45,6 +45,11 @@ func TestSetEachMetadataField(t *testing.T) {
 		t.Fatalf("cache status = %q, want hit", got)
 	}
 
+	SetTransport(qCtx, "doq")
+	if got := Get(qCtx).Transport; got != "doq" {
+		t.Fatalf("transport = %q, want doq", got)
+	}
+
 	SetInternal(qCtx)
 	if got := Get(qCtx).Internal; !got {
 		t.Fatal("internal metadata = false, want true")

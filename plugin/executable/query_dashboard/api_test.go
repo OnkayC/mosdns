@@ -73,6 +73,7 @@ func TestAPIRejectsBadInputs(t *testing.T) {
 		"/api/query-log?offset=-1",
 		"/api/search?q=",
 		"/api/stats?window=not-a-duration",
+		"/api/stats?window=-1s",
 	}
 	for _, path := range cases {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -198,6 +199,26 @@ func TestAPIAggregationsUseRingFallback(t *testing.T) {
 	}
 	if body := assertStatusOK("/api/routes?since=1h"); !strings.Contains(body, `"route":"foreign"`) || !strings.Contains(body, `"count":2`) {
 		t.Fatalf("unexpected routes body: %s", body)
+	}
+}
+
+func TestInMemoryAggregationsUseDeterministicTieBreakers(t *testing.T) {
+	records := []QueryRecord{
+		{Qname: "beta.example.", Client: "10.0.0.2", Route: "zeta"},
+		{Qname: "alpha.example.", Client: "10.0.0.1", Route: "alpha"},
+	}
+
+	domains := topDomainsFromRecords(records, 10)
+	if len(domains) != 2 || domains[0].Qname != "alpha.example." || domains[1].Qname != "beta.example." {
+		t.Fatalf("top domains = %#v, want lexical order for tied counts", domains)
+	}
+	clients := topClientsFromRecords(records, 10)
+	if len(clients) != 2 || clients[0].Client != "10.0.0.1" || clients[1].Client != "10.0.0.2" {
+		t.Fatalf("top clients = %#v, want lexical order for tied counts", clients)
+	}
+	routes := routesFromRecords(records)
+	if len(routes) != 2 || routes[0].Route != "alpha" || routes[1].Route != "zeta" {
+		t.Fatalf("routes = %#v, want lexical order for tied counts", routes)
 	}
 }
 

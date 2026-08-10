@@ -1,7 +1,9 @@
 package query_dashboard
 
 import (
+	"errors"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -218,13 +220,13 @@ func TestSQLiteStatsAggregatesFullWindow(t *testing.T) {
 }
 
 func TestSQLiteStoreCloseAndWriteErrorCallback(t *testing.T) {
-	var writeErrors int
+	var writeErrors atomic.Int32
 	store, err := newSQLiteStore(SQLiteArgs{
 		Path:            filepath.Join(t.TempDir(), "query-dashboard.sqlite"),
 		BatchSize:       100,
 		FlushIntervalMs: 60_000,
 		RetentionHours:  1,
-	}, 1, zap.NewNop(), func(error) { writeErrors++ })
+	}, 1, zap.NewNop(), func(error) { writeErrors.Add(1) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,15 +245,38 @@ func TestSQLiteStoreCloseAndWriteErrorCallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store.reportWriteError(assertErr("synthetic write error"))
-	if writeErrors != 1 {
-		t.Fatalf("write error callback count = %d, want 1", writeErrors)
+	store.reportWriteError(errors.New("synthetic write error"))
+	if got := writeErrors.Load(); got != 1 {
+		t.Fatalf("write error callback count = %d, want 1", got)
 	}
 }
 
-type assertErr string
+func TestSQLiteStoreAppliesDirectConstructorDefaults(t *testing.T) {
+	store, err := newSQLiteStore(SQLiteArgs{
+		Path: filepath.Join(t.TempDir(), "query-dashboard.sqlite"),
+	}, 1, zap.NewNop(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
 
-func (e assertErr) Error() string { return string(e) }
+	if store.batchSize != defaultSQLiteBatchSize {
+		t.Fatalf("batch size = %d, want %d", store.batchSize, defaultSQLiteBatchSize)
+	}
+	if store.flushInterval != time.Duration(defaultSQLiteFlushIntervalMs)*time.Millisecond {
+		t.Fatalf("flush interval = %s, want %dms", store.flushInterval, defaultSQLiteFlushIntervalMs)
+	}
+	if got := store.db.Stats().MaxOpenConnections; got != 4 {
+		t.Fatalf("max open connections = %d, want 4", got)
+	}
+	var busyTimeout int
+	if err := store.db.QueryRow("PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
+		t.Fatal(err)
+	}
+	if busyTimeout != 5000 {
+		t.Fatalf("busy timeout = %d, want 5000", busyTimeout)
+	}
+}
 
 func TestSQLitePrunesExpiredRowsOnStartup(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "query-dashboard.sqlite")

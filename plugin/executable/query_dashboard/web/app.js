@@ -8,9 +8,11 @@ const base = (() => {
   return path || "";
 })();
 let paused = false;
+let refreshInFlight = false;
 let lastRecords = [];
 let latestHealth = null;
 let themeMode = localStorage.getItem("mosdns-dashboard-theme") || "auto";
+if (themeMode === "light" || themeMode === "dark") document.documentElement.setAttribute("data-theme", themeMode);
 let queryLimit = Number(localStorage.getItem("mosdns-dashboard-query-limit") || 100);
 if (![50, 100, 500, 1000].includes(queryLimit)) queryLimit = 100;
 let excludedRoutesText = localStorage.getItem("mosdns-dashboard-excluded-routes") || "";
@@ -198,7 +200,8 @@ function updateStats(health, stats, domains, clients, routes) {
 }
 
 async function refresh() {
-  if (paused) return;
+  if (paused || refreshInFlight) return;
+  refreshInFlight = true;
   try {
     const [health, stats, recent, domains, clients, routes] = await Promise.all([
       getJSON("/health"),
@@ -216,6 +219,8 @@ async function refresh() {
   } catch (err) {
     setStatus(false, "dashboard error");
     el("records").innerHTML = `<tr><td colspan="10" class="error-text">${escapeHTML(err.message)}</td></tr>`;
+  } finally {
+    refreshInFlight = false;
   }
 }
 

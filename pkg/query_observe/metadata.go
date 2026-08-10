@@ -7,6 +7,7 @@ type Metadata struct {
 	Route       string
 	Upstream    string
 	CacheStatus string
+	Transport   string
 	Internal    bool
 }
 
@@ -15,6 +16,7 @@ var (
 	routeKey       = query_context.RegKey()
 	upstreamKey    = query_context.RegKey()
 	cacheStatusKey = query_context.RegKey()
+	transportKey   = query_context.RegKey()
 	internalKey    = query_context.RegKey()
 )
 
@@ -34,6 +36,10 @@ func SetCacheStatus(qCtx *query_context.Context, status string) {
 	storeString(qCtx, cacheStatusKey, status)
 }
 
+func SetTransport(qCtx *query_context.Context, transport string) {
+	storeString(qCtx, transportKey, transport)
+}
+
 func SetInternal(qCtx *query_context.Context) {
 	if qCtx != nil {
 		qCtx.StoreValue(internalKey, true)
@@ -49,6 +55,7 @@ func Get(qCtx *query_context.Context) Metadata {
 		Route:       getString(qCtx, routeKey),
 		Upstream:    getString(qCtx, upstreamKey),
 		CacheStatus: getString(qCtx, cacheStatusKey),
+		Transport:   getString(qCtx, transportKey),
 		Internal:    getBool(qCtx, internalKey),
 	}
 }

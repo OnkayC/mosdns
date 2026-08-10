@@ -44,6 +44,7 @@ func ServeUDP(c *net.UDPConn, h Handler, opts UDPServerOpts) error {
 
 	listenerCtx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(errListenerCtxCanceled)
+	listenerCtx = WithQueryTransport(listenerCtx, "udp")
 
 	rb := pool.GetBuf(dns.MaxMsgSize)
 	defer pool.ReleaseBuf(rb)
@@ -88,7 +89,7 @@ func ServeUDP(c *net.UDPConn, h Handler, opts UDPServerOpts) error {
 
 		// handle query
 		go func() {
-			payload := h.Handle(listenerCtx, q, QueryMeta{ClientAddr: remoteAddr.Addr(), FromUDP: true, Transport: "udp"}, pool.PackBuffer)
+			payload := h.Handle(listenerCtx, q, QueryMeta{ClientAddr: remoteAddr.Addr(), FromUDP: true}, pool.PackBuffer)
 			if payload == nil {
 				return
 			}
