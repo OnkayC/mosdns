@@ -246,6 +246,8 @@ body {
 .path-bar-fill.skip { background: var(--text-dim); }
 .path-bar-fill.udp { background: var(--text-dim); }
 .path-bar-fill.tcp { background: var(--violet); }
+.path-bar-fill.doh { background: var(--cyan); }
+.path-bar-fill.doq { background: var(--teal); }
 .path-bar-fill.other { background: var(--emerald); }
 .path-pct {
   font-family: var(--font-mono);

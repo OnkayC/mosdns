@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"go.uber.org/zap"
 )
 
@@ -116,11 +118,48 @@ func TestAPIHealthAndIndex(t *testing.T) {
 	if !strings.Contains(body, "mosdns query dashboard") {
 		t.Fatalf("index body missing dashboard shell")
 	}
-	if !strings.Contains(body, `/plugins/test/app.js`) || !strings.Contains(body, `/plugins/test/style.css`) {
-		t.Fatalf("index body missing tag-derived asset URLs: %s", body)
+	if !strings.Contains(body, `href="style.css"`) || !strings.Contains(body, `src="app.js"`) {
+		t.Fatalf("index body missing prefix-preserving relative asset URLs: %s", body)
 	}
-	if strings.Contains(body, "__DASHBOARD_BASE__") {
-		t.Fatalf("index body still contains base placeholder")
+	if strings.Contains(body, `href="/`) || strings.Contains(body, `src="/`) {
+		t.Fatalf("index body contains root-relative asset URL: %s", body)
+	}
+	if !strings.Contains(body, `value="doh"`) || !strings.Contains(body, `value="doq"`) {
+		t.Fatalf("index body missing DoH/DoQ transport filters: %s", body)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/style.css", nil)
+	rr = httptest.NewRecorder()
+	d.Api().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("style status = %d", rr.Code)
+	}
+	style := rr.Body.String()
+	if !strings.Contains(style, ".path-bar-fill.doh") || !strings.Contains(style, ".path-bar-fill.doq") {
+		t.Fatalf("style body missing DoH/DoQ chart colors")
+	}
+}
+
+func TestDashboardAssetsUnderReverseProxyPrefix(t *testing.T) {
+	d, err := NewDashboard(&Args{RecentSize: 10}, zap.NewNop(), "custom")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+
+	r := chi.NewRouter()
+	r.Mount("/mosdns/plugins/custom", d.Api())
+	for _, path := range []string{
+		"/mosdns/plugins/custom/",
+		"/mosdns/plugins/custom/app.js",
+		"/mosdns/plugins/custom/style.css",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("%s status = %d body %s", path, rr.Code, rr.Body.String())
+		}
 	}
 }
 

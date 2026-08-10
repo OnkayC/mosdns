@@ -102,3 +102,28 @@ func TestRecordUsesExplicitTransport(t *testing.T) {
 		t.Fatalf("transport = %q, want doq", record.Transport)
 	}
 }
+
+func TestExecSkipsInternalQuery(t *testing.T) {
+	d, err := NewDashboard(&Args{RecentSize: 10}, zap.NewNop(), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+
+	q := new(dns.Msg)
+	q.SetQuestion("refresh.example.", dns.TypeA)
+	qCtx := query_context.NewContext(q)
+	query_observe.SetInternal(qCtx)
+	next := sequence.NewChainWalker([]*sequence.ChainNode{{
+		E: sequence.ExecutableFunc(func(context.Context, *query_context.Context) error {
+			return nil
+		}),
+	}}, nil)
+
+	if err := d.Exec(context.Background(), qCtx, next); err != nil {
+		t.Fatal(err)
+	}
+	if records := d.Recent(1, 0); len(records) != 0 {
+		t.Fatalf("internal query records = %#v, want none", records)
+	}
+}

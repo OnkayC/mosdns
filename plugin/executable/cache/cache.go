@@ -228,6 +228,7 @@ func (c *Cache) Exec(ctx context.Context, qCtx *query_context.Context, next sequ
 // It has an inner singleflight.Group to de-duplicate same msgKey.
 func (c *Cache) doLazyUpdate(msgKey string, qCtx *query_context.Context, next sequence.ChainWalker) {
 	qCtxCopy := qCtx.Copy()
+	query_observe.SetInternal(qCtxCopy)
 	lazyUpdateFunc := func() (any, error) {
 		defer c.lazyUpdateSF.Forget(msgKey)
 		qCtx := qCtxCopy

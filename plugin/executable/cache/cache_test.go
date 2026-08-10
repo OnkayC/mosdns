@@ -117,6 +117,33 @@ func TestCacheExecSetsMissThenHitMetadata(t *testing.T) {
 	}
 }
 
+func TestLazyUpdateMarksInternalObservation(t *testing.T) {
+	c := NewCache(&Args{Size: 16}, Opts{})
+	defer c.Close()
+
+	qCtx := newCacheTestContext("refresh.example.")
+	internal := make(chan bool, 1)
+	next := sequence.NewChainWalker([]*sequence.ChainNode{{
+		E: sequence.ExecutableFunc(func(_ context.Context, qCtx *query_context.Context) error {
+			internal <- query_observe.Get(qCtx).Internal
+			return nil
+		}),
+	}}, nil)
+	c.doLazyUpdate("refresh-key", qCtx, next)
+
+	select {
+	case got := <-internal:
+		if !got {
+			t.Fatal("lazy refresh internal metadata = false, want true")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for lazy refresh")
+	}
+	if query_observe.Get(qCtx).Internal {
+		t.Fatal("client query context was marked internal")
+	}
+}
+
 func newCacheTestContext(qname string) *query_context.Context {
 	q := new(dns.Msg)
 	q.SetQuestion(qname, dns.TypeA)

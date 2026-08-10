@@ -44,6 +44,11 @@ func TestSetEachMetadataField(t *testing.T) {
 	if got := Get(qCtx).CacheStatus; got != "hit" {
 		t.Fatalf("cache status = %q, want hit", got)
 	}
+
+	SetInternal(qCtx)
+	if got := Get(qCtx).Internal; !got {
+		t.Fatal("internal metadata = false, want true")
+	}
 }
 
 func TestCumulativeMetadataAndEmptySetters(t *testing.T) {

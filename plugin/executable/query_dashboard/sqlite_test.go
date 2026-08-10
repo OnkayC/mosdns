@@ -253,13 +253,15 @@ type assertErr string
 
 func (e assertErr) Error() string { return string(e) }
 
-func TestSQLiteDeleteExpired(t *testing.T) {
-	store, err := newSQLiteStore(SQLiteArgs{
-		Path:            filepath.Join(t.TempDir(), "query-dashboard.sqlite"),
+func TestSQLitePrunesExpiredRowsOnStartup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "query-dashboard.sqlite")
+	args := SQLiteArgs{
+		Path:            path,
 		BatchSize:       10,
 		FlushIntervalMs: 60_000,
 		RetentionHours:  1,
-	}, 4, zap.NewNop(), nil)
+	}
+	store, err := newSQLiteStore(args, 4, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,17 +270,20 @@ func TestSQLiteDeleteExpired(t *testing.T) {
 	if err := store.writeBatch([]QueryRecord{oldRecord, newRecord}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.deleteExpired(); err != nil {
+	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
+
+	store, err = newSQLiteStore(args, 4, zap.NewNop(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
 	records, err := store.RecordsSince(time.Now().Add(-24 * time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(records) != 1 || records[0].Qname != "new.example." {
-		t.Fatalf("records after retention = %#v", records)
-	}
-	if err := store.Close(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("records after startup retention = %#v", records)
 	}
 }

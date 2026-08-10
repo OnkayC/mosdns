@@ -10,7 +10,7 @@
       if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
     })();
   </script>
-  <link rel="stylesheet" href="__DASHBOARD_BASE__/style.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="header">
@@ -102,6 +102,8 @@
               <option value="">all transports</option>
               <option value="udp">udp</option>
               <option value="tcp">tcp</option>
+              <option value="doh">doh</option>
+              <option value="doq">doq</option>
             </select>
             <select id="logFilterCache">
               <option value="">all cache</option>
@@ -168,6 +170,6 @@
     </div>
   </div>
 
-  <script src="__DASHBOARD_BASE__/app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

@@ -3,7 +3,6 @@ package query_dashboard
 import (
 	"database/sql"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -55,6 +54,10 @@ func newSQLiteStore(args SQLiteArgs, channelSize int, logger *zap.Logger, onWrit
 	if err := store.init(); err != nil {
 		_ = db.Close()
 		return nil, err
+	}
+	if err := store.deleteExpired(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("prune expired sqlite rows: %w", err)
 	}
 	store.wg.Add(1)
 	go store.worker()
@@ -246,6 +249,12 @@ func (s *sqliteStore) RecordsSince(since time.Time) ([]QueryRecord, error) {
 }
 
 func (s *sqliteStore) Stats(since time.Time) (statsResponse, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return statsResponse{}, err
+	}
+	defer tx.Rollback()
+
 	stats := statsResponse{
 		RcodeCounts:       make(map[string]int),
 		CacheStatusCounts: make(map[string]int),
@@ -253,24 +262,22 @@ func (s *sqliteStore) Stats(since time.Time) (statsResponse, error) {
 	}
 	ts := since.UnixNano()
 
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM queries WHERE ts_unix_nano >= ?`, ts).Scan(&stats.Total); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM queries WHERE ts_unix_nano >= ?`, ts).Scan(&stats.Total); err != nil {
 		return statsResponse{}, err
 	}
 
-	rcodeRows, err := s.db.Query(`SELECT rcode, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND rcode IS NOT NULL GROUP BY rcode`, ts)
+	rcodeRows, err := tx.Query(`SELECT rcode, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND rcode IS NOT NULL GROUP BY rcode`, ts)
 	if err != nil {
 		return statsResponse{}, err
 	}
 	for rcodeRows.Next() {
-		var rcode sql.NullInt64
+		var rcode int64
 		var count int
 		if err := rcodeRows.Scan(&rcode, &count); err != nil {
 			rcodeRows.Close()
 			return statsResponse{}, err
 		}
-		if rcode.Valid {
-			stats.RcodeCounts[strconv.FormatInt(rcode.Int64, 10)] = count
-		}
+		stats.RcodeCounts[strconv.FormatInt(rcode, 10)] = count
 	}
 	if err := rcodeRows.Err(); err != nil {
 		rcodeRows.Close()
@@ -278,7 +285,7 @@ func (s *sqliteStore) Stats(since time.Time) (statsResponse, error) {
 	}
 	rcodeRows.Close()
 
-	cacheRows, err := s.db.Query(`SELECT cache_status, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND cache_status != '' GROUP BY cache_status`, ts)
+	cacheRows, err := tx.Query(`SELECT cache_status, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND cache_status != '' GROUP BY cache_status`, ts)
 	if err != nil {
 		return statsResponse{}, err
 	}
@@ -297,7 +304,7 @@ func (s *sqliteStore) Stats(since time.Time) (statsResponse, error) {
 	}
 	cacheRows.Close()
 
-	routeRows, err := s.db.Query(`SELECT route, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND route != '' GROUP BY route`, ts)
+	routeRows, err := tx.Query(`SELECT route, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND route != '' GROUP BY route`, ts)
 	if err != nil {
 		return statsResponse{}, err
 	}
@@ -316,44 +323,34 @@ func (s *sqliteStore) Stats(since time.Time) (statsResponse, error) {
 	}
 	routeRows.Close()
 
-	p50, err := s.latencyPercentile(ts, 0.50)
+	latencyRows, err := tx.Query(`SELECT latency_us FROM queries WHERE ts_unix_nano >= ? ORDER BY latency_us ASC`, ts)
 	if err != nil {
 		return statsResponse{}, err
 	}
-	p95, err := s.latencyPercentile(ts, 0.95)
-	if err != nil {
+	latencies := make([]int64, 0, stats.Total)
+	for latencyRows.Next() {
+		var latency int64
+		if err := latencyRows.Scan(&latency); err != nil {
+			latencyRows.Close()
+			return statsResponse{}, err
+		}
+		latencies = append(latencies, latency)
+	}
+	if err := latencyRows.Err(); err != nil {
+		latencyRows.Close()
 		return statsResponse{}, err
 	}
-	p99, err := s.latencyPercentile(ts, 0.99)
-	if err != nil {
-		return statsResponse{}, err
+	latencyRows.Close()
+	stats.LatencyUs = latencyStats{
+		P50: percentile(latencies, 0.50),
+		P95: percentile(latencies, 0.95),
+		P99: percentile(latencies, 0.99),
 	}
-	stats.LatencyUs = latencyStats{P50: p50, P95: p95, P99: p99}
-	return stats, nil
-}
 
-func (s *sqliteStore) latencyPercentile(sinceUnixNano int64, p float64) (int64, error) {
-	var total int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM queries WHERE ts_unix_nano >= ?`, sinceUnixNano).Scan(&total); err != nil {
-		return 0, err
+	if err := tx.Commit(); err != nil {
+		return statsResponse{}, err
 	}
-	if total == 0 {
-		return 0, nil
-	}
-	// Match statsFromRecords: idx = ceil(n*p)-1
-	idx := int(math.Ceil(float64(total)*p)) - 1
-	if idx < 0 {
-		idx = 0
-	}
-	if idx >= total {
-		idx = total - 1
-	}
-	var latency int64
-	err := s.db.QueryRow(`SELECT latency_us FROM queries WHERE ts_unix_nano >= ? ORDER BY latency_us ASC LIMIT 1 OFFSET ?`, sinceUnixNano, idx).Scan(&latency)
-	if err != nil {
-		return 0, err
-	}
-	return latency, nil
+	return stats, nil
 }
 
 func (s *sqliteStore) TopDomains(since time.Time, limit int) ([]TopDomainItem, error) {

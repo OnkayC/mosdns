@@ -49,7 +49,6 @@ type QueryRecord struct {
 }
 
 type Dashboard struct {
-	tag    string
 	args   Args
 	logger *zap.Logger
 	ring   *Ring
@@ -96,7 +95,6 @@ func NewDashboard(args *Args, logger *zap.Logger, metricsTag string) (*Dashboard
 
 	labels := prometheus.Labels{"tag": metricsTag}
 	d := &Dashboard{
-		tag:    metricsTag,
 		args:   cfg,
 		logger: logger,
 		ring:   NewRing(cfg.RecentSize),
@@ -168,7 +166,9 @@ func (d *Dashboard) RegMetricsTo(r prometheus.Registerer) error {
 func (d *Dashboard) Exec(ctx context.Context, qCtx *query_context.Context, next sequence.ChainWalker) error {
 	start := time.Now()
 	err := next.ExecNext(ctx, qCtx)
-	d.Record(qCtx, time.Since(start), err)
+	if !query_observe.Get(qCtx).Internal {
+		d.Record(qCtx, time.Since(start), err)
+	}
 	return err
 }
 

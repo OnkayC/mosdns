@@ -63,7 +63,7 @@ type RouteItem struct {
 
 func (d *Dashboard) Api() *chi.Mux {
 	r := chi.NewRouter()
-	r.Get("/", d.serveIndex)
+	r.Get("/", d.serveAsset("web/index.html", "text/html; charset=utf-8"))
 	r.Get("/app.js", d.serveAsset("web/app.js", "application/javascript; charset=utf-8"))
 	r.Get("/style.css", d.serveAsset("web/style.css", "text/css; charset=utf-8"))
 	r.Get("/health", d.handleHealth)
@@ -74,25 +74,6 @@ func (d *Dashboard) Api() *chi.Mux {
 	r.Get("/api/top-clients", d.handleTopClients)
 	r.Get("/api/routes", d.handleRoutes)
 	return r
-}
-
-func (d *Dashboard) pluginBasePath() string {
-	tag := d.tag
-	if tag == "" {
-		tag = PluginType
-	}
-	return "/plugins/" + tag
-}
-
-func (d *Dashboard) serveIndex(w http.ResponseWriter, req *http.Request) {
-	data, err := webFiles.ReadFile("web/index.html")
-	if err != nil {
-		http.NotFound(w, req)
-		return
-	}
-	body := strings.ReplaceAll(string(data), "__DASHBOARD_BASE__", d.pluginBasePath())
-	w.Header().Set("content-type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(body))
 }
 
 func (d *Dashboard) serveAsset(path, contentType string) http.HandlerFunc {
