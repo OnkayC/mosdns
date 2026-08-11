@@ -8,9 +8,9 @@ import (
 	"strings"
 )
 
-const RequiredPrefixText = "2403:300:a04::/48"
+const APPLE_ASN_IPV6_CIDR = "2403:300:a04::/48"
 
-var requiredPrefix = netip.MustParsePrefix(RequiredPrefixText)
+var requiredPrefix = netip.MustParsePrefix(APPLE_ASN_IPV6_CIDR)
 
 // ParsePrefixPolicy accepts the generated MosDNS prefix artifact and rejects
 // empty, malformed, multiple, or divergent policy values.

@@ -14,14 +14,14 @@ import (
 func TestNewLoadsOnlyValidGeneratedPrefixPolicy(t *testing.T) {
 	dir := t.TempDir()
 	valid := filepath.Join(dir, "valid.txt")
-	if err := os.WriteFile(valid, []byte("2403:300:a04::/48\n"), 0o600); err != nil {
+	if err := os.WriteFile(valid, []byte(APPLE_ASN_IPV6_CIDR+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	plugin, err := New(&Args{PrefixFile: valid})
 	if err != nil {
 		t.Fatalf("New(valid): %v", err)
 	}
-	if got := plugin.prefix.String(); got != RequiredPrefixText {
+	if got := plugin.prefix.String(); got != APPLE_ASN_IPV6_CIDR {
 		t.Fatalf("prefix = %s", got)
 	}
 

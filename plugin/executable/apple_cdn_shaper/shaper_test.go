@@ -19,7 +19,7 @@ func mustRR(t *testing.T, text string) dns.RR {
 }
 
 func TestShapeResponseFiltersEveryNonQualifyingAddressChoice(t *testing.T) {
-	prefix := netip.MustParsePrefix("2403:300:a04::/48")
+	prefix := requiredPrefix
 	msg := &dns.Msg{
 		MsgHdr: dns.MsgHdr{Response: true, Rcode: dns.RcodeSuccess, AuthenticatedData: true},
 		Answer: []dns.RR{
@@ -130,7 +130,7 @@ func assertFilteredServiceBindingHints(t *testing.T, values []dns.SVCBKeyValue, 
 }
 
 func TestShapeResponseAvoidsCopyWhenEveryAddressAlreadyQualifies(t *testing.T) {
-	prefix := netip.MustParsePrefix("2403:300:a04::/48")
+	prefix := requiredPrefix
 	msg := &dns.Msg{
 		MsgHdr: dns.MsgHdr{Response: true, Rcode: dns.RcodeSuccess},
 		Answer: []dns.RR{
@@ -147,7 +147,7 @@ func TestShapeResponseAvoidsCopyWhenEveryAddressAlreadyQualifies(t *testing.T) {
 }
 
 func TestShapeResponseLeavesNoPrefixResponseUnchanged(t *testing.T) {
-	prefix := netip.MustParsePrefix("2403:300:a04::/48")
+	prefix := requiredPrefix
 	msg := &dns.Msg{
 		MsgHdr: dns.MsgHdr{Response: true, Rcode: dns.RcodeSuccess},
 		Answer: []dns.RR{
@@ -171,7 +171,7 @@ func TestShapeResponseLeavesNoPrefixResponseUnchanged(t *testing.T) {
 }
 
 func TestShapeResponseDoesNotSynthesizeOnFailures(t *testing.T) {
-	prefix := netip.MustParsePrefix("2403:300:a04::/48")
+	prefix := requiredPrefix
 	for name, msg := range map[string]*dns.Msg{
 		"nil":      nil,
 		"empty":    {MsgHdr: dns.MsgHdr{Response: true, Rcode: dns.RcodeSuccess}},
@@ -187,11 +187,11 @@ func TestShapeResponseDoesNotSynthesizeOnFailures(t *testing.T) {
 }
 
 func TestParsePrefixPolicyRequiresExactSinglePrefix(t *testing.T) {
-	prefix, err := ParsePrefixPolicy(strings.NewReader("# generated\n2403:300:a04::/48\n"))
+	prefix, err := ParsePrefixPolicy(strings.NewReader("# generated\n" + APPLE_ASN_IPV6_CIDR + "\n"))
 	if err != nil {
 		t.Fatalf("ParsePrefixPolicy(valid): %v", err)
 	}
-	if got := prefix.String(); got != "2403:300:a04::/48" {
+	if got := prefix.String(); got != APPLE_ASN_IPV6_CIDR {
 		t.Fatalf("prefix = %s", got)
 	}
 
@@ -199,7 +199,7 @@ func TestParsePrefixPolicyRequiresExactSinglePrefix(t *testing.T) {
 		"empty":     "# only a comment\n",
 		"malformed": "not-a-prefix\n",
 		"divergent": "2403:300::/32\n",
-		"multiple":  "2403:300:a04::/48\n2403:300:a04::/48\n",
+		"multiple":  APPLE_ASN_IPV6_CIDR + "\n" + APPLE_ASN_IPV6_CIDR + "\n",
 		"ipv4":      "192.0.2.0/24\n",
 	} {
 		t.Run(name, func(t *testing.T) {
