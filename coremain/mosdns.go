@@ -66,6 +66,7 @@ func NewMosdns(cfg *Config) (*Mosdns, error) {
 
 	// Start http api server
 	if httpAddr := cfg.API.HTTP; len(httpAddr) > 0 {
+		m.logger.Warn("api http server has no authentication; bind to a trusted interface or use an authenticated reverse proxy", zap.String("addr", httpAddr))
 		httpServer := &http.Server{
 			Addr:    httpAddr,
 			Handler: m.httpMux,

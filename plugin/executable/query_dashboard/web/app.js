@@ -10,7 +10,6 @@ const base = (() => {
 let paused = false;
 let refreshInFlight = false;
 let lastRecords = [];
-let latestHealth = null;
 let themeMode = localStorage.getItem("mosdns-dashboard-theme") || "auto";
 if (themeMode === "light" || themeMode === "dark") document.documentElement.setAttribute("data-theme", themeMode);
 let queryLimit = Number(localStorage.getItem("mosdns-dashboard-query-limit") || 100);
@@ -45,8 +44,12 @@ function excludedRoutes() {
   return new Set(excludedRoutesText.split(/[\s,]+/).map((route) => route.trim()).filter(Boolean));
 }
 
+function effectiveRoute(record) {
+  return record.route || record.entry || "";
+}
+
 async function getJSON(path) {
-  const res = await fetch(`${base}${path}`, { cache: "no-store" });
+  const res = await fetch(`${base}${path}`, { cache: "no-store", signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   return res.json();
 }
@@ -108,9 +111,14 @@ function renderList(id, items, key) {
 function populateRouteFilter(routeCounts) {
   const select = el("logFilterPath");
   const current = select.value;
-  const routes = Object.keys(routeCounts || {}).sort();
-  select.innerHTML = `<option value="">all routes</option>` + routes.map((route) => `<option value="${escapeHTML(route)}">${escapeHTML(route)}</option>`).join("");
-  select.value = routes.includes(current) ? current : "";
+  const routes = new Set(Object.keys(routeCounts || {}));
+  for (const record of lastRecords) {
+    const route = effectiveRoute(record);
+    if (route) routes.add(route);
+  }
+  const sortedRoutes = Array.from(routes).sort();
+  select.innerHTML = `<option value="">all routes</option>` + sortedRoutes.map((route) => `<option value="${escapeHTML(route)}">${escapeHTML(route)}</option>`).join("");
+  select.value = routes.has(current) ? current : "";
 }
 
 function filteredRecords() {
@@ -120,9 +128,10 @@ function filteredRecords() {
   const cache = el("logFilterCache").value;
   const excluded = excludedRoutes();
   return lastRecords.filter((record) => {
-    if (excluded.has(record.route || "")) return false;
+    const effectiveRecordRoute = effectiveRoute(record);
+    if (excluded.has(effectiveRecordRoute)) return false;
     if (domain && !String(record.qname || "").toLowerCase().includes(domain)) return false;
-    if (route && record.route !== route) return false;
+    if (route && effectiveRecordRoute !== route) return false;
     if (transport && record.transport !== transport) return false;
     if (cache && record.cache_status !== cache) return false;
     return true;
@@ -136,7 +145,7 @@ function renderRecords(records) {
     return;
   }
   el("records").innerHTML = records.map((record) => {
-    const route = record.route || record.entry || "—";
+    const route = effectiveRoute(record) || "—";
     const cache = record.cache_status || "—";
     const rcode = rcodeLabel(record.rcode);
     const rcodeClass = record.rcode && record.rcode !== 0 ? " error" : " neutral";
@@ -211,7 +220,6 @@ async function refresh() {
       getJSON("/api/top-clients?since=1h&limit=12"),
       getJSON("/api/routes?since=1h"),
     ]);
-    latestHealth = health;
     lastRecords = recent.records || [];
     updateStats(health, stats, domains, clients, routes);
     applyLogFilter();

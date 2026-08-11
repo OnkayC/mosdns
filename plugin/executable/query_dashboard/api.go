@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 //go:embed web/*
@@ -129,7 +130,7 @@ func (d *Dashboard) handleSearch(w http.ResponseWriter, req *http.Request) {
 	}
 	records, err := d.Search(q, limit)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		d.writeInternalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, recordsResponse{Records: recordsOrEmpty(records)})
@@ -143,7 +144,7 @@ func (d *Dashboard) handleStats(w http.ResponseWriter, req *http.Request) {
 	}
 	stats, err := d.stats(time.Now().Add(-window))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		d.writeInternalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
@@ -156,7 +157,7 @@ func (d *Dashboard) handleTopDomains(w http.ResponseWriter, req *http.Request) {
 	}
 	items, err := d.topDomains(since, limit)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		d.writeInternalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string][]TopDomainItem{"items": topDomainItemsOrEmpty(items)})
@@ -169,7 +170,7 @@ func (d *Dashboard) handleTopClients(w http.ResponseWriter, req *http.Request) {
 	}
 	items, err := d.topClients(since, limit)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		d.writeInternalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string][]TopClientItem{"items": topClientItemsOrEmpty(items)})
@@ -183,7 +184,7 @@ func (d *Dashboard) handleRoutes(w http.ResponseWriter, req *http.Request) {
 	}
 	items, err := d.routes(time.Now().Add(-sinceDuration))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		d.writeInternalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string][]RouteItem{"items": routeItemsOrEmpty(items)})
@@ -253,6 +254,11 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func writeError(w http.ResponseWriter, status int, err error) {
 	writeJSON(w, status, map[string]string{"error": err.Error()})
+}
+
+func (d *Dashboard) writeInternalError(w http.ResponseWriter, err error) {
+	d.logger.Error("query dashboard request failed", zap.Error(err))
+	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 }
 
 func recordsOrEmpty(records []QueryRecord) []QueryRecord {

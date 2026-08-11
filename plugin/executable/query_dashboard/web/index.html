@@ -93,26 +93,26 @@
         <div class="panel-header query-header">
           <span class="panel-title">Recent Queries</span>
           <div class="filters">
-            <input type="text" id="logFilterDomain" placeholder="filter domain...">
-            <input type="text" id="logExcludeRoutes" placeholder="exclude routes..." title="Comma or space separated routes to hide">
-            <select id="logFilterPath">
+            <input type="text" id="logFilterDomain" placeholder="filter domain..." aria-label="Filter by domain">
+            <input type="text" id="logExcludeRoutes" placeholder="exclude routes..." title="Comma or space separated routes to hide" aria-label="Exclude routes">
+            <select id="logFilterPath" aria-label="Filter by route">
               <option value="">all routes</option>
             </select>
-            <select id="logFilterTransport">
+            <select id="logFilterTransport" aria-label="Filter by transport">
               <option value="">all transports</option>
               <option value="udp">udp</option>
               <option value="tcp">tcp</option>
               <option value="doh">doh</option>
               <option value="doq">doq</option>
             </select>
-            <select id="logFilterCache">
+            <select id="logFilterCache" aria-label="Filter by cache status">
               <option value="">all cache</option>
               <option value="hit">hit</option>
               <option value="lazy_hit">lazy hit</option>
               <option value="miss">miss</option>
               <option value="skip">skip</option>
             </select>
-            <select id="logLimit" title="Recent query fetch limit">
+            <select id="logLimit" title="Recent query fetch limit" aria-label="Recent query fetch limit">
               <option value="50">50 rows</option>
               <option value="100" selected>100 rows</option>
               <option value="500">500 rows</option>

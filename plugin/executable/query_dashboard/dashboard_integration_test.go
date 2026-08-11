@@ -162,5 +162,12 @@ func TestSQLiteBackedAPIAndReadErrors(t *testing.T) {
 		if rr.Code != http.StatusInternalServerError {
 			t.Fatalf("%s status = %d, want 500", path, rr.Code)
 		}
+		body := rr.Body.String()
+		if !strings.Contains(body, `"error":"internal server error"`) {
+			t.Fatalf("%s body = %s, want generic internal error", path, body)
+		}
+		if strings.Contains(body, "database is closed") {
+			t.Fatalf("%s exposed backend error: %s", path, body)
+		}
 	}
 }
