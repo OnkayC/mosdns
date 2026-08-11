@@ -200,7 +200,11 @@ func TestSelectorMarksOnlySyntheticPreferredQueryInternal(t *testing.T) {
 	if !internalByType[dns.TypeA] {
 		t.Fatal("synthetic A probe was not marked internal")
 	}
-	if internalByType[dns.TypeAAAA] {
+	internal, ok := internalByType[dns.TypeAAAA]
+	if !ok {
+		t.Fatal("original AAAA query was not observed")
+	}
+	if internal {
 		t.Fatal("original AAAA query was marked internal")
 	}
 }

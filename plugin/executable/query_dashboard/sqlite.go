@@ -365,7 +365,7 @@ func (s *sqliteStore) Stats(ctx context.Context, since time.Time) (statsResponse
 }
 
 func (s *sqliteStore) TopDomains(ctx context.Context, since time.Time, limit int) ([]TopDomainItem, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT lower(qname), COUNT(*) FROM queries WHERE ts_unix_nano >= ? GROUP BY lower(qname) ORDER BY COUNT(*) DESC, lower(qname) ASC LIMIT ?`, since.UnixNano(), limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT lower(qname), COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND qname != '' GROUP BY lower(qname) ORDER BY COUNT(*) DESC, lower(qname) ASC LIMIT ?`, since.UnixNano(), limit)
 	if err != nil {
 		return nil, err
 	}
