@@ -41,6 +41,7 @@ import (
 	_ "github.com/IrineSistiana/mosdns/v5/plugin/matcher/string_exp"
 
 	// executable
+	_ "github.com/IrineSistiana/mosdns/v5/plugin/executable/apple_cdn_shaper"
 	_ "github.com/IrineSistiana/mosdns/v5/plugin/executable/arbitrary"
 	_ "github.com/IrineSistiana/mosdns/v5/plugin/executable/black_hole"
 	_ "github.com/IrineSistiana/mosdns/v5/plugin/executable/cache"
