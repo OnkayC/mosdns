@@ -28,6 +28,7 @@ import (
 	"github.com/IrineSistiana/mosdns/v5/pkg/dnsutils"
 	"github.com/IrineSistiana/mosdns/v5/pkg/pool"
 	"github.com/IrineSistiana/mosdns/v5/pkg/query_context"
+	"github.com/IrineSistiana/mosdns/v5/pkg/query_observe"
 	"github.com/IrineSistiana/mosdns/v5/plugin/executable/sequence"
 	"github.com/miekg/dns"
 	"go.uber.org/zap"
@@ -100,6 +101,7 @@ func (s *Selector) Exec(ctx context.Context, qCtx *query_context.Context, next s
 
 	// async check whether domain has the preferred type
 	qCtxPreferred := qCtx.Copy()
+	query_observe.SetInternal(qCtxPreferred)
 	qCtxPreferred.Q().Question[0].Qtype = s.prefer
 
 	ddl, cacheOk := ctx.Deadline()

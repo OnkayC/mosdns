@@ -78,3 +78,22 @@ func TestCumulativeMetadataAndEmptySetters(t *testing.T) {
 		t.Fatalf("metadata = %#v, want %#v", got, want)
 	}
 }
+
+func TestCopyReplacesObservationMetadata(t *testing.T) {
+	src := newTestContext()
+	SetEntry(src, "secondary")
+	SetRoute(src, "fallback")
+	SetUpstream(src, "quad9")
+	SetTransport(src, "dot")
+
+	dst := newTestContext()
+	SetEntry(dst, "primary")
+	SetRoute(dst, "direct")
+	SetCacheStatus(dst, "miss")
+	SetInternal(dst)
+
+	Copy(dst, src)
+	if got, want := Get(dst), Get(src); got != want {
+		t.Fatalf("copied metadata = %#v, want %#v", got, want)
+	}
+}

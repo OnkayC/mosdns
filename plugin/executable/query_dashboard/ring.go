@@ -12,11 +12,12 @@ const (
 )
 
 type Ring struct {
-	mu       sync.RWMutex
-	records  []QueryRecord
-	next     int
-	capacity int
-	full     bool
+	mu             sync.RWMutex
+	records        []QueryRecord
+	next           int
+	capacity       int
+	full           bool
+	evictedThrough time.Time
 }
 
 func NewRing(capacity int) *Ring {
@@ -40,6 +41,10 @@ func (r *Ring) Add(record QueryRecord) {
 		return
 	}
 
+	evicted := r.records[r.next].Time
+	if evicted.After(r.evictedThrough) {
+		r.evictedThrough = evicted
+	}
 	r.records[r.next] = record
 	r.next = (r.next + 1) % r.capacity
 	r.full = true
@@ -110,6 +115,12 @@ func (r *Ring) Bounds() (oldest *time.Time, newest *time.Time) {
 	oldestTime := r.records[r.oldestIndexLocked()].Time
 	newestTime := r.records[r.newestIndexLocked()].Time
 	return &oldestTime, &newestTime
+}
+
+func (r *Ring) TruncatedSince(since time.Time) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return !r.evictedThrough.IsZero() && !r.evictedThrough.Before(since)
 }
 
 func (r *Ring) recentLocked(limit, offset int) []QueryRecord {

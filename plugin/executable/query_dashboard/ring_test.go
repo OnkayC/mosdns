@@ -64,3 +64,18 @@ func TestRingMinimumCapacity(t *testing.T) {
 		t.Fatalf("minimum capacity recent = %#v", got)
 	}
 }
+
+func TestRingReportsTruncatedAggregationWindow(t *testing.T) {
+	now := time.Now()
+	ring := NewRing(2)
+	ring.Add(QueryRecord{Time: now.Add(-3 * time.Minute), Qname: "one.example."})
+	ring.Add(QueryRecord{Time: now.Add(-2 * time.Minute), Qname: "two.example."})
+	ring.Add(QueryRecord{Time: now.Add(-time.Minute), Qname: "three.example."})
+
+	if !ring.TruncatedSince(now.Add(-10 * time.Minute)) {
+		t.Fatal("old aggregation window was not reported as truncated")
+	}
+	if ring.TruncatedSince(now.Add(-2 * time.Minute)) {
+		t.Fatal("fully retained aggregation window was reported as truncated")
+	}
+}

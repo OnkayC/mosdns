@@ -60,6 +60,21 @@ func Get(qCtx *query_context.Context) Metadata {
 	}
 }
 
+// Copy replaces dst's observation metadata with src's metadata.
+func Copy(dst, src *query_context.Context) {
+	if dst == nil {
+		return
+	}
+	for _, key := range [...]uint32{entryKey, routeKey, upstreamKey, cacheStatusKey, transportKey, internalKey} {
+		value, ok := src.GetValue(key)
+		if ok {
+			dst.StoreValue(key, value)
+		} else {
+			dst.DeleteValue(key)
+		}
+	}
+}
+
 func storeString(qCtx *query_context.Context, key uint32, value string) {
 	if qCtx == nil || value == "" {
 		return

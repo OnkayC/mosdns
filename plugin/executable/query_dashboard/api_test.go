@@ -202,6 +202,35 @@ func TestAPIAggregationsUseRingFallback(t *testing.T) {
 	}
 }
 
+func TestAPIAggregationsReportTruncatedRingWindows(t *testing.T) {
+	d, err := NewDashboard(&Args{RecentSize: 2}, zap.NewNop(), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	now := time.Now()
+	d.ring.Add(QueryRecord{Time: now.Add(-3 * time.Minute), Qname: "one.example."})
+	d.ring.Add(QueryRecord{Time: now.Add(-2 * time.Minute), Qname: "two.example."})
+	d.ring.Add(QueryRecord{Time: now.Add(-time.Minute), Qname: "three.example."})
+
+	for _, path := range []string{
+		"/api/stats?window=10m",
+		"/api/top-domains?since=10m",
+		"/api/top-clients?since=10m",
+		"/api/routes?since=10m",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rr := httptest.NewRecorder()
+		d.Api().ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("%s status = %d body %s", path, rr.Code, rr.Body.String())
+		}
+		if !strings.Contains(rr.Body.String(), `"partial":true`) {
+			t.Fatalf("%s body = %s, want partial marker", path, rr.Body.String())
+		}
+	}
+}
+
 func TestInMemoryAggregationsUseDeterministicTieBreakers(t *testing.T) {
 	records := []QueryRecord{
 		{Qname: "beta.example.", Client: "10.0.0.2", Route: "zeta"},
@@ -219,6 +248,16 @@ func TestInMemoryAggregationsUseDeterministicTieBreakers(t *testing.T) {
 	routes := routesFromRecords(records)
 	if len(routes) != 2 || routes[0].Route != "alpha" || routes[1].Route != "zeta" {
 		t.Fatalf("routes = %#v, want lexical order for tied counts", routes)
+	}
+}
+
+func TestInMemoryTopDomainsCoalescesDNSNameCase(t *testing.T) {
+	items := topDomainsFromRecords([]QueryRecord{
+		{Qname: "Example.COM."},
+		{Qname: "example.com."},
+	}, 10)
+	if len(items) != 1 || items[0] != (TopDomainItem{Qname: "example.com.", Count: 2}) {
+		t.Fatalf("top domains = %#v, want one lower-case item", items)
 	}
 }
 

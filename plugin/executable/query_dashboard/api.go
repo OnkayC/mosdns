@@ -39,6 +39,7 @@ type statsResponse struct {
 	CacheStatusCounts map[string]int `json:"cache_status_counts"`
 	RouteCounts       map[string]int `json:"route_counts"`
 	LatencyUs         latencyStats   `json:"latency_us"`
+	Partial           bool           `json:"partial"`
 }
 
 type latencyStats struct {
@@ -60,6 +61,21 @@ type TopClientItem struct {
 type RouteItem struct {
 	Route string `json:"route"`
 	Count int    `json:"count"`
+}
+
+type topDomainsResponse struct {
+	Items   []TopDomainItem `json:"items"`
+	Partial bool            `json:"partial"`
+}
+
+type topClientsResponse struct {
+	Items   []TopClientItem `json:"items"`
+	Partial bool            `json:"partial"`
+}
+
+type routesResponse struct {
+	Items   []RouteItem `json:"items"`
+	Partial bool        `json:"partial"`
 }
 
 func (d *Dashboard) Api() *chi.Mux {
@@ -128,7 +144,7 @@ func (d *Dashboard) handleSearch(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	records, err := d.Search(q, limit)
+	records, err := d.Search(req.Context(), q, limit)
 	if err != nil {
 		d.writeInternalError(w, err)
 		return
@@ -142,7 +158,7 @@ func (d *Dashboard) handleStats(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	stats, err := d.stats(time.Now().Add(-window))
+	stats, err := d.stats(req.Context(), time.Now().Add(-window))
 	if err != nil {
 		d.writeInternalError(w, err)
 		return
@@ -155,12 +171,13 @@ func (d *Dashboard) handleTopDomains(w http.ResponseWriter, req *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := d.topDomains(since, limit)
+	response, err := d.topDomains(req.Context(), since, limit)
 	if err != nil {
 		d.writeInternalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string][]TopDomainItem{"items": topDomainItemsOrEmpty(items)})
+	response.Items = topDomainItemsOrEmpty(response.Items)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (d *Dashboard) handleTopClients(w http.ResponseWriter, req *http.Request) {
@@ -168,12 +185,13 @@ func (d *Dashboard) handleTopClients(w http.ResponseWriter, req *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := d.topClients(since, limit)
+	response, err := d.topClients(req.Context(), since, limit)
 	if err != nil {
 		d.writeInternalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string][]TopClientItem{"items": topClientItemsOrEmpty(items)})
+	response.Items = topClientItemsOrEmpty(response.Items)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (d *Dashboard) handleRoutes(w http.ResponseWriter, req *http.Request) {
@@ -182,12 +200,13 @@ func (d *Dashboard) handleRoutes(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	items, err := d.routes(time.Now().Add(-sinceDuration))
+	response, err := d.routes(req.Context(), time.Now().Add(-sinceDuration))
 	if err != nil {
 		d.writeInternalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string][]RouteItem{"items": routeItemsOrEmpty(items)})
+	response.Items = routeItemsOrEmpty(response.Items)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func parseSinceAndLimit(w http.ResponseWriter, req *http.Request) (time.Time, int, bool) {
@@ -336,7 +355,7 @@ func topDomainsFromRecords(records []QueryRecord, limit int) []TopDomainItem {
 	counts := make(map[string]int)
 	for _, record := range records {
 		if record.Qname != "" {
-			counts[record.Qname]++
+			counts[strings.ToLower(record.Qname)]++
 		}
 	}
 	items := make([]TopDomainItem, 0, len(counts))

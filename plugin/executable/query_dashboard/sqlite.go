@@ -1,6 +1,7 @@
 package query_dashboard
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -22,13 +23,14 @@ type sqliteStore struct {
 	retention     time.Duration
 	logger        *zap.Logger
 	onWriteError  func(error)
+	onDropped     func(int)
 
 	mu     sync.RWMutex
 	closed bool
 	wg     sync.WaitGroup
 }
 
-func newSQLiteStore(args SQLiteArgs, channelSize int, logger *zap.Logger, onWriteError func(error)) (*sqliteStore, error) {
+func newSQLiteStore(args SQLiteArgs, channelSize int, logger *zap.Logger, onWriteError func(error), onDropped func(int)) (*sqliteStore, error) {
 	args.setDefaults()
 	if channelSize <= 0 {
 		channelSize = 4096
@@ -52,6 +54,7 @@ func newSQLiteStore(args SQLiteArgs, channelSize int, logger *zap.Logger, onWrit
 		retention:     time.Duration(args.RetentionHours) * time.Hour,
 		logger:        logger,
 		onWriteError:  onWriteError,
+		onDropped:     onDropped,
 	}
 	if err := store.init(); err != nil {
 		_ = db.Close()
@@ -142,6 +145,7 @@ func (s *sqliteStore) worker() {
 		}
 		if err := s.writeBatch(batch); err != nil {
 			s.reportWriteError(err)
+			s.reportDropped(len(batch))
 		}
 		batch = batch[:0]
 	}
@@ -225,14 +229,20 @@ func (s *sqliteStore) reportWriteError(err error) {
 	s.logger.Error("query dashboard sqlite write failed", zap.Error(err))
 }
 
+func (s *sqliteStore) reportDropped(count int) {
+	if count > 0 && s.onDropped != nil {
+		s.onDropped(count)
+	}
+}
+
 func escapeLikePattern(s string) string {
 	replacer := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 	return replacer.Replace(s)
 }
 
-func (s *sqliteStore) Search(q string, limit int) ([]QueryRecord, error) {
+func (s *sqliteStore) Search(ctx context.Context, q string, limit int) ([]QueryRecord, error) {
 	like := "%" + escapeLikePattern(strings.ToLower(strings.TrimSpace(q))) + "%"
-	rows, err := s.db.Query(selectRecordSQL+` WHERE lower(qname) LIKE ? ESCAPE '\' OR lower(client) LIKE ? ESCAPE '\' OR lower(route) LIKE ? ESCAPE '\' OR lower(entry) LIKE ? ESCAPE '\' OR lower(upstream) LIKE ? ESCAPE '\' ORDER BY ts_unix_nano DESC LIMIT ?`, like, like, like, like, like, limit)
+	rows, err := s.db.QueryContext(ctx, selectRecordSQL+` WHERE lower(qname) LIKE ? ESCAPE '\' OR lower(client) LIKE ? ESCAPE '\' OR lower(route) LIKE ? ESCAPE '\' OR lower(entry) LIKE ? ESCAPE '\' OR lower(upstream) LIKE ? ESCAPE '\' ORDER BY ts_unix_nano DESC LIMIT ?`, like, like, like, like, like, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -240,8 +250,8 @@ func (s *sqliteStore) Search(q string, limit int) ([]QueryRecord, error) {
 	return scanRecords(rows)
 }
 
-func (s *sqliteStore) RecordsSince(since time.Time) ([]QueryRecord, error) {
-	rows, err := s.db.Query(selectRecordSQL+` WHERE ts_unix_nano >= ? ORDER BY ts_unix_nano DESC`, since.UnixNano())
+func (s *sqliteStore) RecordsSince(ctx context.Context, since time.Time) ([]QueryRecord, error) {
+	rows, err := s.db.QueryContext(ctx, selectRecordSQL+` WHERE ts_unix_nano >= ? ORDER BY ts_unix_nano DESC`, since.UnixNano())
 	if err != nil {
 		return nil, err
 	}
@@ -249,8 +259,8 @@ func (s *sqliteStore) RecordsSince(since time.Time) ([]QueryRecord, error) {
 	return scanRecords(rows)
 }
 
-func (s *sqliteStore) Stats(since time.Time) (statsResponse, error) {
-	tx, err := s.db.Begin()
+func (s *sqliteStore) Stats(ctx context.Context, since time.Time) (statsResponse, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return statsResponse{}, err
 	}
@@ -263,11 +273,11 @@ func (s *sqliteStore) Stats(since time.Time) (statsResponse, error) {
 	}
 	ts := since.UnixNano()
 
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM queries WHERE ts_unix_nano >= ?`, ts).Scan(&stats.Total); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM queries WHERE ts_unix_nano >= ?`, ts).Scan(&stats.Total); err != nil {
 		return statsResponse{}, err
 	}
 
-	rcodeRows, err := tx.Query(`SELECT rcode, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND rcode IS NOT NULL GROUP BY rcode`, ts)
+	rcodeRows, err := tx.QueryContext(ctx, `SELECT rcode, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND rcode IS NOT NULL GROUP BY rcode`, ts)
 	if err != nil {
 		return statsResponse{}, err
 	}
@@ -286,7 +296,7 @@ func (s *sqliteStore) Stats(since time.Time) (statsResponse, error) {
 	}
 	rcodeRows.Close()
 
-	cacheRows, err := tx.Query(`SELECT cache_status, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND cache_status != '' GROUP BY cache_status`, ts)
+	cacheRows, err := tx.QueryContext(ctx, `SELECT cache_status, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND cache_status != '' GROUP BY cache_status`, ts)
 	if err != nil {
 		return statsResponse{}, err
 	}
@@ -305,7 +315,7 @@ func (s *sqliteStore) Stats(since time.Time) (statsResponse, error) {
 	}
 	cacheRows.Close()
 
-	routeRows, err := tx.Query(`SELECT route, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND route != '' GROUP BY route`, ts)
+	routeRows, err := tx.QueryContext(ctx, `SELECT route, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND route != '' GROUP BY route`, ts)
 	if err != nil {
 		return statsResponse{}, err
 	}
@@ -324,7 +334,7 @@ func (s *sqliteStore) Stats(since time.Time) (statsResponse, error) {
 	}
 	routeRows.Close()
 
-	latencyRows, err := tx.Query(`SELECT latency_us FROM queries WHERE ts_unix_nano >= ? ORDER BY latency_us ASC`, ts)
+	latencyRows, err := tx.QueryContext(ctx, `SELECT latency_us FROM queries WHERE ts_unix_nano >= ? ORDER BY latency_us ASC`, ts)
 	if err != nil {
 		return statsResponse{}, err
 	}
@@ -354,8 +364,8 @@ func (s *sqliteStore) Stats(since time.Time) (statsResponse, error) {
 	return stats, nil
 }
 
-func (s *sqliteStore) TopDomains(since time.Time, limit int) ([]TopDomainItem, error) {
-	rows, err := s.db.Query(`SELECT qname, COUNT(*) FROM queries WHERE ts_unix_nano >= ? GROUP BY qname ORDER BY COUNT(*) DESC, qname ASC LIMIT ?`, since.UnixNano(), limit)
+func (s *sqliteStore) TopDomains(ctx context.Context, since time.Time, limit int) ([]TopDomainItem, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT lower(qname), COUNT(*) FROM queries WHERE ts_unix_nano >= ? GROUP BY lower(qname) ORDER BY COUNT(*) DESC, lower(qname) ASC LIMIT ?`, since.UnixNano(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -371,8 +381,8 @@ func (s *sqliteStore) TopDomains(since time.Time, limit int) ([]TopDomainItem, e
 	return items, rows.Err()
 }
 
-func (s *sqliteStore) TopClients(since time.Time, limit int) ([]TopClientItem, error) {
-	rows, err := s.db.Query(`SELECT client, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND client IS NOT NULL AND client != '' GROUP BY client ORDER BY COUNT(*) DESC, client ASC LIMIT ?`, since.UnixNano(), limit)
+func (s *sqliteStore) TopClients(ctx context.Context, since time.Time, limit int) ([]TopClientItem, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT client, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND client IS NOT NULL AND client != '' GROUP BY client ORDER BY COUNT(*) DESC, client ASC LIMIT ?`, since.UnixNano(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -388,8 +398,8 @@ func (s *sqliteStore) TopClients(since time.Time, limit int) ([]TopClientItem, e
 	return items, rows.Err()
 }
 
-func (s *sqliteStore) Routes(since time.Time) ([]RouteItem, error) {
-	rows, err := s.db.Query(`SELECT route, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND route IS NOT NULL AND route != '' GROUP BY route ORDER BY COUNT(*) DESC, route ASC LIMIT ?`, since.UnixNano(), maxLimit)
+func (s *sqliteStore) Routes(ctx context.Context, since time.Time) ([]RouteItem, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT route, COUNT(*) FROM queries WHERE ts_unix_nano >= ? AND route IS NOT NULL AND route != '' GROUP BY route ORDER BY COUNT(*) DESC, route ASC LIMIT ?`, since.UnixNano(), maxLimit)
 	if err != nil {
 		return nil, err
 	}

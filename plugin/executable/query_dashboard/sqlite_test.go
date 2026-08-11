@@ -1,6 +1,7 @@
 package query_dashboard
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"sync/atomic"
@@ -17,7 +18,7 @@ func TestSQLiteStorePersistsAndQueriesRecords(t *testing.T) {
 		BatchSize:       2,
 		FlushIntervalMs: 60_000,
 		RetentionHours:  168,
-	}, 4, zap.NewNop(), nil)
+	}, 4, zap.NewNop(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,13 +86,13 @@ func TestSQLiteStorePersistsAndQueriesRecords(t *testing.T) {
 		BatchSize:       2,
 		FlushIntervalMs: 60_000,
 		RetentionHours:  168,
-	}, 4, zap.NewNop(), nil)
+	}, 4, zap.NewNop(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer store.Close()
 
-	search, err := store.Search("alpha", 10)
+	search, err := store.Search(context.Background(), "alpha", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +103,7 @@ func TestSQLiteStorePersistsAndQueriesRecords(t *testing.T) {
 		t.Fatalf("nil rcode record scanned with rcode %#v", *search[0].Rcode)
 	}
 
-	since, err := store.RecordsSince(now.Add(-90 * time.Second))
+	since, err := store.RecordsSince(context.Background(), now.Add(-90*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +111,7 @@ func TestSQLiteStorePersistsAndQueriesRecords(t *testing.T) {
 		t.Fatalf("records since = %#v", since)
 	}
 
-	topDomains, err := store.TopDomains(now.Add(-time.Hour), 10)
+	topDomains, err := store.TopDomains(context.Background(), now.Add(-time.Hour), 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +119,7 @@ func TestSQLiteStorePersistsAndQueriesRecords(t *testing.T) {
 		t.Fatalf("top domains = %#v", topDomains)
 	}
 
-	topClients, err := store.TopClients(now.Add(-time.Hour), 10)
+	topClients, err := store.TopClients(context.Background(), now.Add(-time.Hour), 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +127,7 @@ func TestSQLiteStorePersistsAndQueriesRecords(t *testing.T) {
 		t.Fatalf("top clients = %#v", topClients)
 	}
 
-	routes, err := store.Routes(now.Add(-time.Hour))
+	routes, err := store.Routes(context.Background(), now.Add(-time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +142,7 @@ func TestSQLiteSearchEscapesLikeWildcards(t *testing.T) {
 		BatchSize:       10,
 		FlushIntervalMs: 60_000,
 		RetentionHours:  1,
-	}, 4, zap.NewNop(), nil)
+	}, 4, zap.NewNop(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +158,7 @@ func TestSQLiteSearchEscapesLikeWildcards(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	underscore, err := store.Search("_sip._tcp", 10)
+	underscore, err := store.Search(context.Background(), "_sip._tcp", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +166,7 @@ func TestSQLiteSearchEscapesLikeWildcards(t *testing.T) {
 		t.Fatalf("underscore search = %#v, want only literal _sip._tcp", underscore)
 	}
 
-	percent, err := store.Search("100%", 10)
+	percent, err := store.Search(context.Background(), "100%", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +181,7 @@ func TestSQLiteStatsAggregatesFullWindow(t *testing.T) {
 		BatchSize:       10,
 		FlushIntervalMs: 60_000,
 		RetentionHours:  1,
-	}, 4, zap.NewNop(), nil)
+	}, 4, zap.NewNop(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +199,7 @@ func TestSQLiteStatsAggregatesFullWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stats, err := store.Stats(now.Add(-time.Hour))
+	stats, err := store.Stats(context.Background(), now.Add(-time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,6 +220,30 @@ func TestSQLiteStatsAggregatesFullWindow(t *testing.T) {
 	}
 }
 
+func TestSQLiteTopDomainsCoalescesDNSNameCase(t *testing.T) {
+	store, err := newSQLiteStore(SQLiteArgs{
+		Path: filepath.Join(t.TempDir(), "query-dashboard.sqlite"),
+	}, 1, zap.NewNop(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	now := time.Now()
+	if err := store.writeBatch([]QueryRecord{
+		{Time: now, Qname: "Example.COM."},
+		{Time: now, Qname: "example.com."},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	items, err := store.TopDomains(context.Background(), now.Add(-time.Minute), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0] != (TopDomainItem{Qname: "example.com.", Count: 2}) {
+		t.Fatalf("top domains = %#v, want one lower-case item", items)
+	}
+}
+
 func TestSQLiteStoreCloseAndWriteErrorCallback(t *testing.T) {
 	var writeErrors atomic.Int32
 	store, err := newSQLiteStore(SQLiteArgs{
@@ -226,7 +251,7 @@ func TestSQLiteStoreCloseAndWriteErrorCallback(t *testing.T) {
 		BatchSize:       100,
 		FlushIntervalMs: 60_000,
 		RetentionHours:  1,
-	}, 1, zap.NewNop(), func(error) { writeErrors.Add(1) })
+	}, 1, zap.NewNop(), func(error) { writeErrors.Add(1) }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,10 +276,34 @@ func TestSQLiteStoreCloseAndWriteErrorCallback(t *testing.T) {
 	}
 }
 
+func TestSQLiteFailedBatchIsCountedAsDropped(t *testing.T) {
+	var dropped atomic.Int32
+	store, err := newSQLiteStore(SQLiteArgs{
+		Path:            filepath.Join(t.TempDir(), "query-dashboard.sqlite"),
+		BatchSize:       1,
+		FlushIntervalMs: 60_000,
+	}, 1, zap.NewNop(), nil, func(count int) { dropped.Add(int32(count)) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !store.Enqueue(QueryRecord{Time: time.Now(), Qname: "lost.example."}) {
+		t.Fatal("enqueue failed")
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got := dropped.Load(); got != 1 {
+		t.Fatalf("dropped count = %d, want 1", got)
+	}
+}
+
 func TestSQLiteStoreAppliesDirectConstructorDefaults(t *testing.T) {
 	store, err := newSQLiteStore(SQLiteArgs{
 		Path: filepath.Join(t.TempDir(), "query-dashboard.sqlite"),
-	}, 1, zap.NewNop(), nil)
+	}, 1, zap.NewNop(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +335,7 @@ func TestSQLitePrunesExpiredRowsOnStartup(t *testing.T) {
 		FlushIntervalMs: 60_000,
 		RetentionHours:  1,
 	}
-	store, err := newSQLiteStore(args, 4, zap.NewNop(), nil)
+	store, err := newSQLiteStore(args, 4, zap.NewNop(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,16 +348,32 @@ func TestSQLitePrunesExpiredRowsOnStartup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err = newSQLiteStore(args, 4, zap.NewNop(), nil)
+	store, err = newSQLiteStore(args, 4, zap.NewNop(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	records, err := store.RecordsSince(time.Now().Add(-24 * time.Hour))
+	records, err := store.RecordsSince(context.Background(), time.Now().Add(-24*time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(records) != 1 || records[0].Qname != "new.example." {
 		t.Fatalf("records after startup retention = %#v", records)
+	}
+}
+
+func TestSQLiteQueriesRespectCanceledContext(t *testing.T) {
+	store, err := newSQLiteStore(SQLiteArgs{
+		Path: filepath.Join(t.TempDir(), "query-dashboard.sqlite"),
+	}, 1, zap.NewNop(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := store.Stats(ctx, time.Time{}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Stats error = %v, want context canceled", err)
 	}
 }

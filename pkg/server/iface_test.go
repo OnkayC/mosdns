@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
+	"net"
 	"net/netip"
 	"testing"
 )
@@ -20,5 +22,21 @@ func TestQueryTransportContext(t *testing.T) {
 	ctx := WithQueryTransport(context.Background(), "doh")
 	if got := QueryTransportFromContext(ctx); got != "doh" {
 		t.Fatalf("transport = %q, want doh", got)
+	}
+}
+
+func TestTCPTransportLabelsTLSAsDoT(t *testing.T) {
+	plainClient, plainServer := net.Pipe()
+	defer plainClient.Close()
+	defer plainServer.Close()
+	if got := tcpTransport(plainServer); got != "tcp" {
+		t.Fatalf("plain transport = %q, want tcp", got)
+	}
+
+	tlsClient, tlsServer := net.Pipe()
+	defer tlsClient.Close()
+	defer tlsServer.Close()
+	if got := tcpTransport(tls.Server(tlsServer, &tls.Config{})); got != "dot" {
+		t.Fatalf("TLS transport = %q, want dot", got)
 	}
 }

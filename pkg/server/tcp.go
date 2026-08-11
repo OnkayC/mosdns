@@ -71,7 +71,7 @@ func ServeTCP(l net.Listener, h Handler, opts TCPServerOpts) error {
 
 		// handle connection
 		tcpConnCtx, cancelConn := context.WithCancelCause(listenerCtx)
-		tcpConnCtx = WithQueryTransport(tcpConnCtx, "tcp")
+		tcpConnCtx = WithQueryTransport(tcpConnCtx, tcpTransport(c))
 		go func() {
 			defer c.Close()
 			defer cancelConn(errConnectionCtxCanceled)
@@ -117,4 +117,11 @@ func ServeTCP(l net.Listener, h Handler, opts TCPServerOpts) error {
 			}
 		}()
 	}
+}
+
+func tcpTransport(conn net.Conn) string {
+	if _, ok := conn.(*tls.Conn); ok {
+		return "dot"
+	}
+	return "tcp"
 }

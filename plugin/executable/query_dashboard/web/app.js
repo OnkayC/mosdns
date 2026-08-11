@@ -177,7 +177,7 @@ function updateStats(health, stats, domains, clients, routes) {
   const errorCount = Object.entries(stats.rcode_counts || {}).reduce((sum, [rcode, count]) => rcode === "0" ? sum : sum + count, 0);
 
   el("totalQueries").textContent = fmtNum(total);
-  el("qps").textContent = `${(total / 300).toFixed(2)} qps · 5m window`;
+  el("qps").textContent = `${(total / 300).toFixed(2)} qps · 5m window${stats.partial ? " · partial" : ""}`;
   el("cacheRate").textContent = cacheKnown ? `${pct(hit, cacheKnown)}%` : "—";
   el("cacheEntries").textContent = `${fmtNum(hit)} hits · ${fmtNum(miss)} misses`;
   el("errorCount").textContent = fmtNum(errorCount);
@@ -223,7 +223,8 @@ async function refresh() {
     lastRecords = recent.records || [];
     updateStats(health, stats, domains, clients, routes);
     applyLogFilter();
-    setStatus(true, "connected");
+    const partial = stats.partial || domains.partial || clients.partial || routes.partial;
+    setStatus(true, partial ? "connected · partial history" : "connected");
   } catch (err) {
     setStatus(false, "dashboard error");
     el("records").innerHTML = `<tr><td colspan="10" class="error-text">${escapeHTML(err.message)}</td></tr>`;

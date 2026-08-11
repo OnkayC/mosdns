@@ -10,6 +10,7 @@ import (
 	"github.com/IrineSistiana/mosdns/v5/pkg/query_context"
 	"github.com/IrineSistiana/mosdns/v5/pkg/query_observe"
 	"github.com/IrineSistiana/mosdns/v5/plugin/executable/sequence"
+	"github.com/miekg/dns"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -110,7 +111,7 @@ func NewDashboard(args *Args, logger *zap.Logger, metricsTag string) (*Dashboard
 		}),
 		droppedTotal: prometheus.NewCounter(prometheus.CounterOpts{
 			Name:        "dropped_total",
-			Help:        "The total number of query dashboard records dropped by the persistence queue.",
+			Help:        "The total number of query dashboard records dropped before or during SQLite persistence.",
 			ConstLabels: labels,
 		}),
 		sqliteWriteErrorsTotal: prometheus.NewCounter(prometheus.CounterOpts{
@@ -128,7 +129,7 @@ func NewDashboard(args *Args, logger *zap.Logger, metricsTag string) (*Dashboard
 	})
 
 	if cfg.SQLite.Enabled {
-		store, err := newSQLiteStore(cfg.SQLite, cfg.ChannelSize, logger, d.handleSQLiteWriteError)
+		store, err := newSQLiteStore(cfg.SQLite, cfg.ChannelSize, logger, d.handleSQLiteWriteError, d.handleSQLiteDropped)
 		if err != nil {
 			return nil, err
 		}
@@ -189,11 +190,8 @@ func (d *Dashboard) Record(qCtx *query_context.Context, elapsed time.Duration, e
 		entry = meta.Entry
 	}
 
-	var rcode *int
-	if r := qCtx.R(); r != nil {
-		v := r.Rcode
-		rcode = &v
-	}
+	rcodeValue := clientVisibleRcode(qCtx, execErr)
+	rcode := &rcodeValue
 
 	client := ""
 	if qCtx.ServerMeta.ClientAddr.IsValid() {
@@ -244,20 +242,36 @@ func (d *Dashboard) Close() error {
 	return nil
 }
 
+func clientVisibleRcode(qCtx *query_context.Context, execErr error) int {
+	if execErr != nil {
+		return dns.RcodeServerFailure
+	}
+	if response := qCtx.R(); response != nil {
+		return response.Rcode
+	}
+	return dns.RcodeRefused
+}
+
 func (d *Dashboard) Recent(limit, offset int) []QueryRecord {
 	return d.ring.Recent(limit, offset)
 }
 
-func (d *Dashboard) Search(q string, limit int) ([]QueryRecord, error) {
+func (d *Dashboard) Search(ctx context.Context, q string, limit int) ([]QueryRecord, error) {
 	if d.sqlite != nil {
-		return d.sqlite.Search(q, normalizeLimit(limit, defaultLimit))
+		return d.sqlite.Search(ctx, q, normalizeLimit(limit, defaultLimit))
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return d.ring.Search(q, limit), nil
 }
 
-func (d *Dashboard) recordsSince(since time.Time) ([]QueryRecord, error) {
+func (d *Dashboard) recordsSince(ctx context.Context, since time.Time) ([]QueryRecord, error) {
 	if d.sqlite != nil {
-		return d.sqlite.RecordsSince(since)
+		return d.sqlite.RecordsSince(ctx, since)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	records := d.ring.All()
 	out := records[:0]
@@ -269,38 +283,58 @@ func (d *Dashboard) recordsSince(since time.Time) ([]QueryRecord, error) {
 	return out, nil
 }
 
-func (d *Dashboard) stats(since time.Time) (statsResponse, error) {
+func (d *Dashboard) stats(ctx context.Context, since time.Time) (statsResponse, error) {
 	if d.sqlite != nil {
-		return d.sqlite.Stats(since)
+		return d.sqlite.Stats(ctx, since)
 	}
-	records, err := d.recordsSince(since)
+	records, err := d.recordsSince(ctx, since)
 	if err != nil {
 		return statsResponse{}, err
 	}
-	return statsFromRecords(records), nil
+	stats := statsFromRecords(records)
+	stats.Partial = d.ring.TruncatedSince(since)
+	return stats, nil
 }
 
-func (d *Dashboard) topDomains(since time.Time, limit int) ([]TopDomainItem, error) {
+func (d *Dashboard) topDomains(ctx context.Context, since time.Time, limit int) (topDomainsResponse, error) {
 	limit = normalizeLimit(limit, 50)
 	if d.sqlite != nil {
-		return d.sqlite.TopDomains(since, limit)
+		items, err := d.sqlite.TopDomains(ctx, since, limit)
+		return topDomainsResponse{Items: items}, err
 	}
-	return topDomainsFromRecords(mustRecords(d.recordsSince(since)), limit), nil
+	records, err := d.recordsSince(ctx, since)
+	if err != nil {
+		return topDomainsResponse{}, err
+	}
+	items := topDomainsFromRecords(records, limit)
+	return topDomainsResponse{Items: items, Partial: d.ring.TruncatedSince(since)}, nil
 }
 
-func (d *Dashboard) topClients(since time.Time, limit int) ([]TopClientItem, error) {
+func (d *Dashboard) topClients(ctx context.Context, since time.Time, limit int) (topClientsResponse, error) {
 	limit = normalizeLimit(limit, 50)
 	if d.sqlite != nil {
-		return d.sqlite.TopClients(since, limit)
+		items, err := d.sqlite.TopClients(ctx, since, limit)
+		return topClientsResponse{Items: items}, err
 	}
-	return topClientsFromRecords(mustRecords(d.recordsSince(since)), limit), nil
+	records, err := d.recordsSince(ctx, since)
+	if err != nil {
+		return topClientsResponse{}, err
+	}
+	items := topClientsFromRecords(records, limit)
+	return topClientsResponse{Items: items, Partial: d.ring.TruncatedSince(since)}, nil
 }
 
-func (d *Dashboard) routes(since time.Time) ([]RouteItem, error) {
+func (d *Dashboard) routes(ctx context.Context, since time.Time) (routesResponse, error) {
 	if d.sqlite != nil {
-		return d.sqlite.Routes(since)
+		items, err := d.sqlite.Routes(ctx, since)
+		return routesResponse{Items: items}, err
 	}
-	return routesFromRecords(mustRecords(d.recordsSince(since))), nil
+	records, err := d.recordsSince(ctx, since)
+	if err != nil {
+		return routesResponse{}, err
+	}
+	items := routesFromRecords(records)
+	return routesResponse{Items: items, Partial: d.ring.TruncatedSince(since)}, nil
 }
 
 func (d *Dashboard) handleSQLiteWriteError(err error) {
@@ -308,9 +342,10 @@ func (d *Dashboard) handleSQLiteWriteError(err error) {
 	d.sqliteWriteErrorsTotal.Inc()
 }
 
-func mustRecords(records []QueryRecord, err error) []QueryRecord {
-	if err != nil {
-		return nil
+func (d *Dashboard) handleSQLiteDropped(count int) {
+	if count <= 0 {
+		return
 	}
-	return records
+	d.droppedCount.Add(uint64(count))
+	d.droppedTotal.Add(float64(count))
 }

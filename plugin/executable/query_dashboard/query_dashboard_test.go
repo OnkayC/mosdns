@@ -2,6 +2,7 @@ package query_dashboard
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -125,5 +126,38 @@ func TestExecSkipsInternalQuery(t *testing.T) {
 	}
 	if records := d.Recent(1, 0); len(records) != 0 {
 		t.Fatalf("internal query records = %#v, want none", records)
+	}
+}
+
+func TestRecordUsesClientVisibleResponseCode(t *testing.T) {
+	tests := []struct {
+		name    string
+		setResp bool
+		err     error
+		want    int
+	}{
+		{name: "execution error overrides stale response", setResp: true, err: errors.New("upstream failed"), want: dns.RcodeServerFailure},
+		{name: "missing response is refused", want: dns.RcodeRefused},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d, err := NewDashboard(&Args{RecentSize: 1}, zap.NewNop(), "test")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer d.Close()
+			q := new(dns.Msg)
+			q.SetQuestion("example.com.", dns.TypeA)
+			qCtx := query_context.NewContext(q)
+			if tt.setResp {
+				r := new(dns.Msg)
+				r.SetReply(q)
+				qCtx.SetResponse(r)
+			}
+			record := d.Record(qCtx, time.Microsecond, tt.err)
+			if record.Rcode == nil || *record.Rcode != tt.want {
+				t.Fatalf("rcode = %#v, want %d", record.Rcode, tt.want)
+			}
+		})
 	}
 }

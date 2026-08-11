@@ -22,11 +22,13 @@ package dual_selector
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/IrineSistiana/mosdns/v5/coremain"
 	"github.com/IrineSistiana/mosdns/v5/pkg/query_context"
+	"github.com/IrineSistiana/mosdns/v5/pkg/query_observe"
 	"github.com/IrineSistiana/mosdns/v5/plugin/executable/sequence"
 	"github.com/miekg/dns"
 	"go.uber.org/zap"
@@ -167,5 +169,38 @@ func TestSelector_Exec(t *testing.T) {
 				t.Errorf("Exec() hasReply = %v, wantReply %v", hasReply, tt.wantReply)
 			}
 		})
+	}
+}
+
+func TestSelectorMarksOnlySyntheticPreferredQueryInternal(t *testing.T) {
+	s := newSelector(sequence.NewBQ(coremain.NewTestMosdnsWithPlugins(nil), zap.NewNop()), dns.TypeA)
+	defer s.Close()
+
+	var mu sync.Mutex
+	internalByType := make(map[uint16]bool)
+	next := sequence.ExecutableFunc(func(_ context.Context, qCtx *query_context.Context) error {
+		qtype := qCtx.Q().Question[0].Qtype
+		mu.Lock()
+		internalByType[qtype] = query_observe.Get(qCtx).Internal
+		mu.Unlock()
+		r := new(dns.Msg)
+		r.SetReply(qCtx.Q())
+		qCtx.SetResponse(r)
+		return nil
+	})
+	q := new(dns.Msg)
+	q.SetQuestion("example.", dns.TypeAAAA)
+	qCtx := query_context.NewContext(q)
+	if err := s.Exec(context.Background(), qCtx, sequence.NewChainWalker([]*sequence.ChainNode{{E: next}}, nil)); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if !internalByType[dns.TypeA] {
+		t.Fatal("synthetic A probe was not marked internal")
+	}
+	if internalByType[dns.TypeAAAA] {
+		t.Fatal("original AAAA query was marked internal")
 	}
 }
