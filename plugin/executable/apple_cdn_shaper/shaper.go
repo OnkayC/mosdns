@@ -18,8 +18,8 @@ func ShapeResponse(msg *dns.Msg, prefix netip.Prefix) (*dns.Msg, bool) {
 	prefix = prefix.Masked()
 
 	state := addressChoiceState{}
-	state.inspectRecords(msg.Answer, prefix)
-	state.inspectRecords(msg.Extra, prefix)
+	state.inspectRecords(msg.Answer, prefix, nil)
+	state.inspectRecords(msg.Extra, prefix, responseGraphNames(msg.Answer))
 	if !state.qualifying || !state.conflicting {
 		return msg, false
 	}
@@ -37,8 +37,13 @@ type addressChoiceState struct {
 	conflicting bool
 }
 
-func (s *addressChoiceState) inspectRecords(records []dns.RR, prefix netip.Prefix) {
+func (s *addressChoiceState) inspectRecords(records []dns.RR, prefix netip.Prefix, allowed map[string]struct{}) {
 	for _, rr := range records {
+		if allowed != nil {
+			if _, ok := allowed[dns.CanonicalName(rr.Header().Name)]; !ok {
+				continue
+			}
+		}
 		switch value := rr.(type) {
 		case *dns.A:
 			s.conflicting = true
@@ -50,6 +55,30 @@ func (s *addressChoiceState) inspectRecords(records []dns.RR, prefix netip.Prefi
 			s.inspectServiceBinding(value.Value, prefix)
 		}
 	}
+}
+
+func responseGraphNames(answer []dns.RR) map[string]struct{} {
+	names := make(map[string]struct{})
+	for _, rr := range answer {
+		names[dns.CanonicalName(rr.Header().Name)] = struct{}{}
+		switch value := rr.(type) {
+		case *dns.CNAME:
+			names[dns.CanonicalName(value.Target)] = struct{}{}
+		case *dns.SVCB:
+			addServiceTarget(names, value.Hdr.Name, value.Target)
+		case *dns.HTTPS:
+			addServiceTarget(names, value.Hdr.Name, value.Target)
+		}
+	}
+	return names
+}
+
+func addServiceTarget(names map[string]struct{}, owner, target string) {
+	if target == "" || target == "." {
+		names[dns.CanonicalName(owner)] = struct{}{}
+		return
+	}
+	names[dns.CanonicalName(target)] = struct{}{}
 }
 
 func (s *addressChoiceState) inspectServiceBinding(values []dns.SVCBKeyValue, prefix netip.Prefix) {

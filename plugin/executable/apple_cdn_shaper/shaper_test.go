@@ -146,6 +146,31 @@ func TestShapeResponseAvoidsCopyWhenEveryAddressAlreadyQualifies(t *testing.T) {
 	}
 }
 
+func TestShapeResponseIgnoresUnrelatedAdditionalAddresses(t *testing.T) {
+	prefix := requiredPrefix
+	msg := &dns.Msg{
+		MsgHdr: dns.MsgHdr{Response: true, Rcode: dns.RcodeSuccess},
+		Answer: []dns.RR{
+			mustRR(t, "cdn.example. 60 IN AAAA 2001:db8::10"),
+		},
+		Extra: []dns.RR{
+			mustRR(t, "unrelated.example. 60 IN AAAA 2403:300:a04::99"),
+		},
+	}
+	want := msg.String()
+
+	out, changed := ShapeResponse(msg, prefix)
+	if changed {
+		t.Fatal("unrelated additional AAAA must not trigger shaping")
+	}
+	if out != msg {
+		t.Fatal("response identity changed")
+	}
+	if out.String() != want {
+		t.Fatalf("response changed:\n%s", out)
+	}
+}
+
 func TestShapeResponseLeavesNoPrefixResponseUnchanged(t *testing.T) {
 	prefix := requiredPrefix
 	msg := &dns.Msg{
