@@ -26,7 +26,7 @@ func TestNewLoadsOnlyValidGeneratedPrefixPolicy(t *testing.T) {
 	}
 
 	invalid := filepath.Join(dir, "invalid.txt")
-	if err := os.WriteFile(invalid, []byte("2403:300::/32\n"), 0o600); err != nil {
+	if err := os.WriteFile(invalid, []byte("2403:300:a04::/48\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := New(&Args{PrefixFile: invalid}); err == nil {

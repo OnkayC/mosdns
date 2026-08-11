@@ -198,7 +198,7 @@ func TestParsePrefixPolicyRequiresExactSinglePrefix(t *testing.T) {
 	for name, policy := range map[string]string{
 		"empty":     "# only a comment\n",
 		"malformed": "not-a-prefix\n",
-		"divergent": "2403:300::/32\n",
+		"divergent": "2403:300:a04::/48\n",
 		"multiple":  APPLE_ASN_IPV6_CIDR + "\n" + APPLE_ASN_IPV6_CIDR + "\n",
 		"ipv4":      "192.0.2.0/24\n",
 	} {

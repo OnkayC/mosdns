@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const APPLE_ASN_IPV6_CIDR = "2403:300:a04::/48"
+const APPLE_ASN_IPV6_CIDR = "2403:300::/32"
 
 var requiredPrefix = netip.MustParsePrefix(APPLE_ASN_IPV6_CIDR)
 
