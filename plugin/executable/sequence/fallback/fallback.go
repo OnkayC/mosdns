@@ -28,8 +28,8 @@ import (
 	"github.com/IrineSistiana/mosdns/v5/coremain"
 	"github.com/IrineSistiana/mosdns/v5/pkg/pool"
 	"github.com/IrineSistiana/mosdns/v5/pkg/query_context"
+	"github.com/IrineSistiana/mosdns/v5/pkg/query_observe"
 	"github.com/IrineSistiana/mosdns/v5/plugin/executable/sequence"
-	"github.com/miekg/dns"
 	"go.uber.org/zap"
 )
 
@@ -108,7 +108,7 @@ func (f *fallback) Exec(ctx context.Context, qCtx *query_context.Context) error 
 }
 
 func (f *fallback) doFallback(ctx context.Context, qCtx *query_context.Context) error {
-	respChan := make(chan *dns.Msg, 2) // resp could be nil.
+	respChan := make(chan *query_context.Context, 2) // context could be nil.
 	primFailed := make(chan struct{})
 	primDone := make(chan struct{})
 
@@ -129,7 +129,7 @@ func (f *fallback) doFallback(ctx context.Context, qCtx *query_context.Context) 
 			respChan <- nil
 		} else {
 			close(primDone)
-			respChan <- r
+			respChan <- qCtx
 		}
 	}()
 
@@ -167,18 +167,23 @@ func (f *fallback) doFallback(ctx context.Context, qCtx *query_context.Context) 
 			case <-timer.C: // or timed out.
 			}
 		}
-		respChan <- r
+		if r == nil {
+			respChan <- nil
+		} else {
+			respChan <- qCtx
+		}
 	}()
 
 	for i := 0; i < 2; i++ {
 		select {
 		case <-ctx.Done():
 			return context.Cause(ctx)
-		case r := <-respChan:
-			if r == nil { // One of goroutines finished but failed.
+		case winner := <-respChan:
+			if winner == nil { // One of goroutines finished but failed.
 				continue
 			}
-			qCtx.SetResponse(r)
+			qCtx.SetResponse(winner.R())
+			query_observe.Copy(qCtx, winner)
 			return nil
 		}
 	}

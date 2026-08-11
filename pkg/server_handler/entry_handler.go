@@ -25,6 +25,7 @@ import (
 
 	"github.com/IrineSistiana/mosdns/v5/mlog"
 	"github.com/IrineSistiana/mosdns/v5/pkg/query_context"
+	"github.com/IrineSistiana/mosdns/v5/pkg/query_observe"
 	"github.com/IrineSistiana/mosdns/v5/pkg/server"
 	"github.com/IrineSistiana/mosdns/v5/pkg/utils"
 	"github.com/IrineSistiana/mosdns/v5/plugin/executable/sequence"
@@ -95,6 +96,7 @@ func (h *EntryHandler) Handle(ctx context.Context, q *dns.Msg, serverMeta server
 
 	qCtx := query_context.NewContext(q)
 	qCtx.ServerMeta = serverMeta
+	query_observe.SetTransport(qCtx, server.QueryTransportFromContext(ctx))
 
 	// exec entry
 	err := h.opts.Entry.Exec(ctx, qCtx)

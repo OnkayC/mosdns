@@ -33,6 +33,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/pprof"
+	"time"
 )
 
 type Mosdns struct {
@@ -66,10 +67,8 @@ func NewMosdns(cfg *Config) (*Mosdns, error) {
 
 	// Start http api server
 	if httpAddr := cfg.API.HTTP; len(httpAddr) > 0 {
-		httpServer := &http.Server{
-			Addr:    httpAddr,
-			Handler: m.httpMux,
-		}
+		m.logger.Warn("api http server has no authentication; bind to a trusted interface or use an authenticated reverse proxy", zap.String("addr", httpAddr))
+		httpServer := newAPIServer(httpAddr, m.httpMux)
 		m.sc.Attach(func(done func(), closeSignal <-chan struct{}) {
 			defer done()
 			errChan := make(chan error, 1)
@@ -120,6 +119,17 @@ func NewMosdns(cfg *Config) (*Mosdns, error) {
 	m.logger.Info("all plugins are loaded")
 
 	return m, nil
+}
+
+func newAPIServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      2 * time.Minute,
+		IdleTimeout:       time.Minute,
+	}
 }
 
 // NewTestMosdnsWithPlugins returns a mosdns instance for testing.

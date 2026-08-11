@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mosdns — Query Dashboard</title>
+  <script>
+    (function () {
+      const t = localStorage.getItem('mosdns-dashboard-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">mosdns</div>
+      <span id="headerVersion" class="version-pill">mosdns query dashboard</span>
+      <div class="tagline">DNS policy with live observability</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn ghost" id="themeBtn" title="Cycle theme: Auto → Light → Dark">Auto</button>
+      <button class="btn amber" id="pauseBtn">Pause</button>
+      <div class="status-badge">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">connecting...</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard">
+    <div class="stats-row">
+      <div class="stat-card queries">
+        <div class="stat-label">Total Queries</div>
+        <div class="stat-value" id="totalQueries">—</div>
+        <div class="stat-sub" id="qps">last 5 minutes</div>
+      </div>
+      <div class="stat-card cache">
+        <div class="stat-label">Cache Hit Rate</div>
+        <div class="stat-value" id="cacheRate">—</div>
+        <div class="stat-sub" id="cacheEntries">—</div>
+      </div>
+      <div class="stat-card blocked">
+        <div class="stat-label">Errors</div>
+        <div class="stat-value" id="errorCount">—</div>
+        <div class="stat-sub" id="errorSub">rcode != 0</div>
+      </div>
+      <div class="stat-card overrides">
+        <div class="stat-label">Recent Ring</div>
+        <div class="stat-value" id="recentSize">—</div>
+        <div class="stat-sub" id="recentSub">—</div>
+      </div>
+      <div class="stat-card uptime">
+        <div class="stat-label">p95 Latency</div>
+        <div class="stat-value" id="p95Latency">—</div>
+        <div class="stat-sub" id="p99Latency">—</div>
+      </div>
+      <div class="stat-card memory">
+        <div class="stat-label">SQLite</div>
+        <div class="stat-value" id="sqliteStatus">—</div>
+        <div class="stat-sub" id="sqliteErrors">—</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Resolution Paths</span>
+        <span class="panel-title dim" id="routeTotal">—</span>
+      </div>
+      <div class="panel-body" id="pathBars"></div>
+    </div>
+
+    <div class="panel-grid">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Inbound Wire <span class="dim">clients → mosdns</span></span>
+          <span class="panel-title dim" id="transportTotal">—</span>
+        </div>
+        <div class="panel-body" id="transportBars"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Cache Status</span>
+          <span class="panel-title dim" id="cacheTotal">—</span>
+        </div>
+        <div class="panel-body" id="cacheBars"></div>
+      </div>
+    </div>
+
+    <div class="main-grid">
+      <div class="panel query-panel">
+        <div class="panel-header query-header">
+          <span class="panel-title">Recent Queries</span>
+          <div class="filters">
+            <input type="text" id="logFilterDomain" placeholder="filter domain..." aria-label="Filter by domain">
+            <input type="text" id="logExcludeRoutes" placeholder="exclude routes..." title="Comma or space separated routes to hide" aria-label="Exclude routes">
+            <select id="logFilterPath" aria-label="Filter by route">
+              <option value="">all routes</option>
+            </select>
+            <select id="logFilterTransport" aria-label="Filter by transport">
+              <option value="">all transports</option>
+              <option value="udp">udp</option>
+              <option value="tcp">tcp</option>
+              <option value="doh">doh</option>
+              <option value="doq">doq</option>
+            </select>
+            <select id="logFilterCache" aria-label="Filter by cache status">
+              <option value="">all cache</option>
+              <option value="hit">hit</option>
+              <option value="lazy_hit">lazy hit</option>
+              <option value="miss">miss</option>
+              <option value="skip">skip</option>
+            </select>
+            <select id="logLimit" title="Recent query fetch limit" aria-label="Recent query fetch limit">
+              <option value="50">50 rows</option>
+              <option value="100" selected>100 rows</option>
+              <option value="500">500 rows</option>
+              <option value="1000">1000 rows</option>
+            </select>
+            <span class="panel-title dim" id="queryCount">—</span>
+          </div>
+        </div>
+        <div class="query-log">
+          <div class="query-log-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Client</th>
+                  <th>Domain</th>
+                  <th>Type</th>
+                  <th>Route</th>
+                  <th>Wire</th>
+                  <th>Rcode</th>
+                  <th>Cache</th>
+                  <th>Latency</th>
+                  <th>Upstream</th>
+                </tr>
+              </thead>
+              <tbody id="records"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Top Domains</span></div>
+          <div class="panel-body list-body" id="topDomains"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Top Clients</span></div>
+          <div class="panel-body list-body" id="topClients"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Routes</span></div>
+          <div class="panel-body list-body" id="routesList"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Health</span></div>
+          <div class="panel-body">
+            <div class="health-row"><span>Recent capacity</span><strong id="healthCapacity">—</strong></div>
+            <div class="health-row"><span>Dropped</span><strong id="healthDropped">—</strong></div>
+            <div class="health-row"><span>SQLite errors</span><strong id="healthSqliteErrors">—</strong></div>
+            <div class="health-row"><span>Newest record</span><strong id="healthNewest">—</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

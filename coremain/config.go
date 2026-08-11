@@ -46,5 +46,7 @@ type PluginConfig struct {
 }
 
 type APIConfig struct {
+	// HTTP exposes the unauthenticated metrics, profiling, and plugin APIs.
+	// Bind it to a trusted interface or protect it with an authenticated reverse proxy.
 	HTTP string `yaml:"http"`
 }

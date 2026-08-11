@@ -65,6 +65,7 @@ func ServeDoQ(l *quic.Listener, h Handler, opts DoQServerOpts) error {
 
 		// handle connection
 		connCtx, cancelConn := context.WithCancelCause(listenerCtx)
+		connCtx = WithQueryTransport(connCtx, "doq")
 		go func() {
 			defer c.CloseWithError(0, "")
 			defer cancelConn(errConnectionCtxCanceled)

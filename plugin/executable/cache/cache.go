@@ -36,6 +36,7 @@ import (
 	"github.com/IrineSistiana/mosdns/v5/pkg/cache"
 	"github.com/IrineSistiana/mosdns/v5/pkg/pool"
 	"github.com/IrineSistiana/mosdns/v5/pkg/query_context"
+	"github.com/IrineSistiana/mosdns/v5/pkg/query_observe"
 	"github.com/IrineSistiana/mosdns/v5/pkg/utils"
 	"github.com/IrineSistiana/mosdns/v5/plugin/executable/sequence"
 	"github.com/go-chi/chi/v5"
@@ -192,6 +193,7 @@ func (c *Cache) Exec(ctx context.Context, qCtx *query_context.Context, next sequ
 
 	msgKey := getMsgKey(q)
 	if len(msgKey) == 0 { // skip cache
+		query_observe.SetCacheStatus(qCtx, "skip")
 		return next.ExecNext(ctx, qCtx)
 	}
 
@@ -201,9 +203,16 @@ func (c *Cache) Exec(ctx context.Context, qCtx *query_context.Context, next sequ
 		c.doLazyUpdate(msgKey, qCtx, next)
 	}
 	if cachedResp != nil { // cache hit
+		if lazyHit {
+			query_observe.SetCacheStatus(qCtx, "lazy_hit")
+		} else {
+			query_observe.SetCacheStatus(qCtx, "hit")
+		}
 		c.hitTotal.Inc()
 		cachedResp.Id = q.Id // change msg id
 		qCtx.SetResponse(cachedResp)
+	} else {
+		query_observe.SetCacheStatus(qCtx, "miss")
 	}
 
 	err := next.ExecNext(ctx, qCtx)
@@ -219,6 +228,7 @@ func (c *Cache) Exec(ctx context.Context, qCtx *query_context.Context, next sequ
 // It has an inner singleflight.Group to de-duplicate same msgKey.
 func (c *Cache) doLazyUpdate(msgKey string, qCtx *query_context.Context, next sequence.ChainWalker) {
 	qCtxCopy := qCtx.Copy()
+	query_observe.SetInternal(qCtxCopy)
 	lazyUpdateFunc := func() (any, error) {
 		defer c.lazyUpdateSF.Forget(msgKey)
 		qCtx := qCtxCopy

@@ -27,3 +27,17 @@ type QueryMeta struct {
 	ServerName string
 	UrlPath    string
 }
+
+type queryTransportContextKey struct{}
+
+func WithQueryTransport(ctx context.Context, transport string) context.Context {
+	return context.WithValue(ctx, queryTransportContextKey{}, transport)
+}
+
+func QueryTransportFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	transport, _ := ctx.Value(queryTransportContextKey{}).(string)
+	return transport
+}

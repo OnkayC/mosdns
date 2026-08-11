@@ -103,7 +103,7 @@ func (h *HttpHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if tlsStat := req.TLS; tlsStat != nil {
 		queryMeta.ServerName = tlsStat.ServerName
 	}
-	resp := h.dnsHandler.Handle(req.Context(), q, queryMeta, pool.PackBuffer)
+	resp := h.dnsHandler.Handle(WithQueryTransport(req.Context(), "doh"), q, queryMeta, pool.PackBuffer)
 	if resp == nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
